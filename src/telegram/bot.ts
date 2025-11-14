@@ -1,0 +1,315 @@
+import { Env, loadEnv } from "../config/env";
+
+// Telegram Bot API types
+interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    from: {
+      id: number;
+      is_bot: boolean;
+      first_name: string;
+      username?: string;
+    };
+    chat: {
+      id: number;
+      type: string;
+    };
+    text?: string;
+  };
+  callback_query?: {
+    id: string;
+    from: {
+      id: number;
+      username?: string;
+    };
+    message: {
+      message_id: number;
+      chat: {
+        id: number;
+      };
+    };
+    data?: string;
+  };
+}
+
+export class TelegramBot {
+  private token: string;
+  private apiUrl: string;
+  private webhookUrl?: string;
+
+  constructor() {
+    const env = loadEnv();
+    if (!env.TELEGRAM_BOT_TOKEN) {
+      throw new Error("TELEGRAM_BOT_TOKEN is required");
+    }
+    this.token = env.TELEGRAM_BOT_TOKEN;
+    this.apiUrl = `https://api.telegram.org/bot${this.token}`;
+    this.webhookUrl = env.TELEGRAM_WEBHOOK_URL;
+  }
+
+  private async request(method: string, params?: Record<string, any>): Promise<any> {
+    const url = `${this.apiUrl}/${method}`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: params ? JSON.stringify(params) : undefined,
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Telegram API error: ${response.status} ${error}`);
+    }
+
+    return response.json();
+  }
+
+  // Send message to user
+  async sendMessage(chatId: number, text: string, options?: { reply_markup?: any; parse_mode?: string }): Promise<any> {
+    return this.request("sendMessage", {
+      chat_id: chatId,
+      text,
+      parse_mode: options?.parse_mode || "HTML",
+      ...options,
+    });
+  }
+
+  // Set webhook
+  async setWebhook(url: string): Promise<any> {
+    return this.request("setWebhook", { url });
+  }
+
+  // Get webhook info
+  async getWebhookInfo(): Promise<any> {
+    return this.request("getWebhookInfo");
+  }
+
+  // Set bot commands
+  async setCommands(commands: Array<{ command: string; description: string }>): Promise<any> {
+    return this.request("setMyCommands", { commands });
+  }
+
+  // Set Mini App button
+  async setMenuButton(chatId: number, text: string, webAppUrl: string): Promise<any> {
+    return this.request("setChatMenuButton", {
+      chat_id: chatId,
+      menu_button: {
+        type: "web_app",
+        text,
+        web_app: { url: webAppUrl },
+      },
+    });
+  }
+
+  // Answer callback query
+  async answerCallbackQuery(callbackQueryId: string, text?: string, showAlert?: boolean): Promise<any> {
+    return this.request("answerCallbackQuery", {
+      callback_query_id: callbackQueryId,
+      text,
+      show_alert: showAlert,
+    });
+  }
+
+  // Get bot info (username, etc.)
+  async getMe(): Promise<any> {
+    return this.request("getMe");
+  }
+}
+
+// Bot command handlers
+// Handle /start command with deeplink parameters
+export async function handleStartCommand(update: TelegramUpdate): Promise<void> {
+  const message = update.message;
+  if (!message) return;
+
+  const bot = new TelegramBot();
+  const chatId = message.chat.id;
+  const userId = message.from?.id;
+  const text = message.text || "";
+  const env = loadEnv();
+  const frontendUrl = env.FRONTEND_URL || "https://gifties-w3yr.vercel.app";
+
+  // Check if /start has parameters (deeplink)
+  const startParam = text.split(" ")[1]; // /start claim_ABC123
+  
+  if (startParam?.startsWith("claim_")) {
+    // Parse claim code from deeplink
+    const { parseTelegramStartParam } = await import("../utils/telegram-deeplink");
+    const claimParams = parseTelegramStartParam(startParam);
+    
+    if (claimParams?.claimCode) {
+      // Redirect to claim page in Mini App
+      const claimUrl = claimParams.secret
+        ? `${frontendUrl}/gifts/claim/${claimParams.claimCode}?secret=${claimParams.secret}`
+        : `${frontendUrl}/gifts/claim/${claimParams.claimCode}`;
+      
+      await bot.sendMessage(
+        chatId,
+        `🎁 <b>You have a gift to claim!</b>\n\nClick the button below to open the claim page in the Mini App.`,
+        {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🎁 Claim Gift in Mini App",
+                  web_app: { url: claimUrl },
+                },
+              ],
+            ],
+          },
+        }
+      );
+      return;
+    }
+  }
+
+  // Regular /start command (no deeplink)
+  await handleBotCommand(update);
+}
+
+export async function handleBotCommand(update: TelegramUpdate): Promise<void> {
+  try {
+  const bot = new TelegramBot();
+  const env = loadEnv();
+    const frontendUrl = env.FRONTEND_URL || "https://gifties-w3yr.vercel.app";
+
+    if (!update.message) {
+      console.log("⚠️ No message in update");
+      return;
+    }
+
+    const command = update.message.text;
+    if (!command) {
+      console.log("⚠️ No command text in message");
+      return;
+    }
+    
+    const chatId = update.message.chat.id;
+    const userName = update.message.from.first_name || "User";
+
+    if (command === "/start" || command.startsWith("/start ")) {
+      // Use the new handleStartCommand which supports deeplinks
+      await handleStartCommand(update);
+    } else if (command === "/help") {
+      const helpMessage = `🤖 <b>Gifties Bot - Complete Command Guide</b>\n\n` +
+        `📋 <b>Basic Commands</b>\n` +
+        `/start - Start the bot and see welcome message\n` +
+        `/help - Show this help message with all commands\n` +
+        `/open - Open Gifties Mini App\n\n` +
+        `🎁 <b>Gift Commands</b>\n` +
+        `/compose - Open Mini App to compose a personalized gift\n` +
+        `/compose @username - Generate AI-powered gift suggestion for user\n` +
+        `/sendgift @username - Send gift to a user by handle (creates USDC gift with claimable link)\n` +
+        `/birthdays - View upcoming birthdays (next 30 days)\n` +
+        `/giftlink - View your pending gifts and claim links\n\n` +
+        `💼 <b>Wallet Commands</b>\n` +
+        `/wallet - View your wallet address, balance, and funding instructions\n\n` +
+        `🌐 <b>Transfer & Swap Commands</b>\n` +
+        `/transfer <amount> <chain> <recipient> - Cross-chain USDC transfer using CCTP\n` +
+        `  Example: /transfer 10 arc-testnet @username\n` +
+        `/swap <amount> <token> - Swap tokens (ETH ↔ USDC)\n` +
+        `  Example: /swap 0.1 ETH\n\n` +
+        `🎯 <b>How It Works</b>\n` +
+        `1. Connect your wallet in the Mini App\n` +
+        `2. Add birthdays or use /sendgift @username\n` +
+        `3. Bot generates personalized message and gift suggestion\n` +
+        `4. Send gift via Goody (physical) or USDC (crypto)\n` +
+        `5. Share gift link with recipient\n\n` +
+        `💡 <b>Tips</b>\n` +
+        `• Use buttons in messages for quick actions\n` +
+        `• Commands work in both private chats and groups\n` +
+        `• Connect your wallet first to enable all features\n` +
+        `• Fund your wallet to send gifts\n` +
+        `• Bot checks balance before sending gifts\n` +
+        `• Use /transfer for cross-chain USDC transfers\n` +
+        `• Use /swap to convert ETH to USDC (or vice versa)\n\n` +
+        `🎂 <b>Birthday Features</b>\n` +
+        `• View upcoming birthdays with /birthdays\n` +
+        `• Click on a birthday to generate gift suggestion\n` +
+        `• Bot creates personalized message using AI\n` +
+        `• Send physical gifts via Goody or USDC\n\n` +
+        `🔗 <b>Need Help?</b>\n` +
+        `• Use /wallet to get funding instructions\n` +
+        `• Check balance before sending gifts\n` +
+        `• All commands work in groups too!`;
+      
+      await bot.sendMessage(chatId, helpMessage, {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "🎁 Open Mini App", web_app: { url: frontendUrl } },
+            ],
+            [
+              { text: "💼 Check Wallet", callback_data: "check_wallet" },
+              { text: "🎂 View Birthdays", callback_data: "birthdays" },
+            ],
+          ],
+        },
+      });
+    } else if (command === "/open") {
+      await bot.sendMessage(chatId, `🎁 Opening Gifties...`, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🎁 Open Gifties",
+              web_app: { url: frontendUrl },
+            },
+          ],
+          ],
+        },
+      });
+    } else if (command === "/wallet") {
+      const { handleWalletCommand } = await import("./handlers");
+      await handleWalletCommand(bot, chatId, update.message.from.id);
+    } else if (command.startsWith("/sendgift") || command.startsWith("/sendgifts")) {
+      const { handleSendGiftCommand } = await import("./handlers");
+      const handle = command.split(" ")[1]?.replace("@", "");
+      await handleSendGiftCommand(bot, chatId, update.message.from.id, handle);
+    } else if (command === "/giftlink" || command === "/giftlinks") {
+      const { handleGiftLinkCommand } = await import("./handlers");
+      await handleGiftLinkCommand(bot, chatId, update.message.from.id);
+    } else if (command === "/birthdays" || command === "/birthday") {
+      const { handleBirthdaysCommand } = await import("./handlers");
+      await handleBirthdaysCommand(bot, chatId, update.message.from.id);
+    } else if (command.startsWith("/compose")) {
+      const handle = command.split(" ")[1]?.replace("@", "");
+      if (handle) {
+        const { handleGiftForHandle } = await import("./handlers");
+        await handleGiftForHandle(bot, chatId, update.message.from.id, handle);
+      } else {
+        await bot.sendMessage(chatId, `✍️ <b>Compose Gift</b>\n\nOpening Mini App to compose your gift...`, {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🎁 Open Gifties",
+                  web_app: { url: `${frontendUrl}/compose` },
+                },
+          ],
+        ],
+      },
+    });
+      }
+    } else if (command.startsWith("/transfer")) {
+      const { handleTransferCommand } = await import("./handlers");
+      const args = command.split(" ").slice(1); // Remove /transfer and get args
+      await handleTransferCommand(bot, chatId, update.message.from.id, args);
+    } else if (command.startsWith("/swap")) {
+      const { handleSwapCommand } = await import("./handlers");
+      const args = command.split(" ").slice(1); // Remove /swap and get args
+      await handleSwapCommand(bot, chatId, update.message.from.id, args);
+    } else {
+      console.log(`⚠️ Unknown command: ${command}`);
+      await bot.sendMessage(chatId, `❓ Unknown command. Use /help to see available commands.`);
+    }
+  } catch (error: any) {
+    console.error("❌ Error in handleBotCommand:", error);
+    console.error("Stack:", error.stack);
+    throw error; // Re-throw so caller can handle it
+  }
+}
+

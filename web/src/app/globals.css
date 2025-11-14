@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply text-gray-900 antialiased;
+    background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 25%, #f9a8d4 50%, #f472b6 75%, #ec4899 100%);
+    background-size: 400% 400%;
+    animation: birthdayGradient 20s ease infinite;
+    background-attachment: fixed;
+    position: relative;
+  }
+  
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+      radial-gradient(circle at 20% 50%, rgba(255, 182, 193, 0.3) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(255, 192, 203, 0.3) 0%, transparent 50%),
+      radial-gradient(circle at 40% 20%, rgba(255, 218, 185, 0.2) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  
+  /* Telegram Mini App specific styles */
+  @media (max-width: 768px) {
+    body {
+      background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 25%, #f9a8d4 50%, #f472b6 75%, #ec4899 100%);
+      background-size: 400% 400%;
+      animation: birthdayGradient 20s ease infinite;
+    }
+  }
+  
+  @keyframes birthdayGradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+}
+
+/* Telegram Mini App theme support */
+@layer utilities {
+  .tg-viewport {
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+    position: relative;
+  }
+  
+  .tg-card {
+    @apply bg-white/90 backdrop-blur-md rounded-2xl shadow-xl border border-pink-200/50;
+    @apply transition-all duration-200 hover:shadow-2xl hover:scale-[1.01];
+    position: relative;
+    z-index: 1;
+  }
+  
+  .tg-button-primary {
+    @apply bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 text-white rounded-xl px-6 py-3 font-semibold;
+    @apply shadow-lg hover:shadow-xl active:scale-95 transition-all duration-200;
+    @apply hover:from-pink-600 hover:via-rose-600 hover:to-pink-700;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .tg-button-secondary {
+    @apply bg-white/90 backdrop-blur-md text-gray-900 rounded-xl px-6 py-3 font-semibold;
+    @apply border border-pink-200 shadow-md hover:shadow-lg active:scale-95 transition-all duration-200;
+    @apply hover:bg-white hover:border-pink-300;
+    position: relative;
+    z-index: 1;
+  }
+  
+  .tg-gradient-bg {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+  }
+  
+  @keyframes gradientShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  
+  .tg-glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/30;
+  }
+}

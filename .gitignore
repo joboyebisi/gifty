@@ -1,0 +1,112 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/out/
+/web/.next/
+/web/out/
+
+# Production
+/build
+/dist
+
+# Misc
+.DS_Store
+*.pem
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local env files
+.env*.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# Secret files (Circle entity secrets)
+*entity-secret*.json
+*secret*.json
+rotate-entity-secret.json
+new-entity-secret*.json
+
+# Lock files (use package-lock.json only)
+yarn.lock
+
+# Railway/Nixpacks config (not needed)
+.nixpacks.toml
+
+# Development scripts (keep locally, not in repo)
+build-and-deploy.ps1
+check-webhook.ps1
+demo-script.ps1
+edit-rebase-remove-file.ps1
+edit-rebase-todo.ps1
+fix-rebase.ps1
+fix-telegram-bot.ps1
+test-goody-integration.ps1
+test-goody-webhook.ps1
+verify-and-reset-webhook.ps1
+set-webhook-and-commands.ps1
+setup-telegram.sh
+
+# Environment variable files (sensitive)
+RAILWAY_ENV_VARS.txt
+VERCEL_ENV_VARS.txt
+HACKATHON_FORM_CONTENT.txt
+
+# Development scripts folder
+scripts/
+
+# Circle recovery folder
+circle-recovery/
+
+# Documentation files (keep local only, not in repo)
+BULK_GIFTS_FEATURE.md
+CODEBASE_ANALYSIS.md
+COMPLETION_REPORT.md
+CRITICAL_INTEGRATIONS_ANALYSIS.md
+EXECUTION_STATUS.md
+FINAL_INTEGRATION_STATUS.md
+HACKATHON_SUBMISSION.md
+IMPLEMENTATION_PRIORITY.md
+INTEGRATION_SUMMARY.md
+MISSING_ENV_VARS.md
+PRD_CIRCLE_ARC_HACKATHON.md
+PRD_GIFTY.md
+PRD_ISSUES_FIXES.md
+QUICK_START.md
+RENAME_SUMMARY.md
+REQUIRED_KEYS_AND_FIXES.md
+TELEGRAM_DEEPLINK_SETUP.md
+TODO_AI_GROUP_ANALYSIS.md
+TODO_BULK_GIFTS_ARCHITECTURE.md
+TODO_MILESTONES.md
+TODO_PRODUCTION_READINESS.md
+
