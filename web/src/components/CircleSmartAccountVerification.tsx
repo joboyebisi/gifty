@@ -23,19 +23,18 @@ export function CircleSmartAccountVerification() {
       return;
     }
 
-    if (!walletClient) {
-      setStatus("error");
-      setError("Wallet client not ready. Waiting for wagmi to initialize...");
-      console.error("❌ Circle Smart Account verification: walletClient is null");
-      console.log("Debug info:", { 
-        hasPrimaryWallet: !!primaryWallet, 
-        hasAddress: !!primaryWallet?.address,
-        address: primaryWallet?.address 
-      });
-      return;
-    }
-
+    // Wait a bit for wagmi to initialize after Dynamic wallet connects
+    // This is a known issue - wagmi needs time to sync with Dynamic's wallet
+    let timeoutId: NodeJS.Timeout;
+    
     async function verifyCircleSmartAccount() {
+      if (!walletClient) {
+        setStatus("error");
+        setError("Wallet client not ready. Please refresh the page if this persists.");
+        console.error("❌ Circle Smart Account verification: walletClient is null");
+        return;
+      }
+
       try {
         const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
         
@@ -73,7 +72,14 @@ export function CircleSmartAccountVerification() {
       }
     }
 
-    verifyCircleSmartAccount();
+    // Wait 2 seconds for wagmi to initialize, then verify
+    timeoutId = setTimeout(() => {
+      verifyCircleSmartAccount();
+    }, 2000);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [primaryWallet?.address, walletClient]);
 
   if (!primaryWallet?.address) {

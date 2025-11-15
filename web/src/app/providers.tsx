@@ -4,16 +4,16 @@ import { EthereumWalletConnectors } from "@dynamic-labs/ethereum";
 import { WagmiProvider, createConfig, http } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode, useEffect } from "react";
-import { arcTestnet, arcMainnet } from "../config/chains";
+import { arcTestnet, arcMainnet, sepoliaTestnet } from "../config/chains";
 
 const queryClient = new QueryClient();
 
-// Wagmi config for Arc network (for direct blockchain interactions)
-// Note: arcMainnet currently uses same ID as testnet, so we only configure testnet transport
+// Wagmi config for Arc network and Ethereum Sepolia (for CCTP testing)
 // Configure Wagmi to not conflict with Dynamic SDK's ethereum injection
 const wagmiConfig = createConfig({
-  chains: [arcTestnet, arcMainnet],
+  chains: [sepoliaTestnet, arcTestnet, arcMainnet],
   transports: {
+    [sepoliaTestnet.id]: http("https://rpc.sepolia.org"), // Ethereum Sepolia RPC
     [arcTestnet.id]: http("https://rpc.testnet.arc.network"), // Official Arc Testnet RPC
     // arcMainnet.id is same as arcTestnet.id currently, so transport is already configured above
   },

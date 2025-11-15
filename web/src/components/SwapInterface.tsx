@@ -5,7 +5,7 @@ import { useWalletClient } from "wagmi";
 import { Address } from "viem";
 import { SwapService, SwapParams, SwapResult } from "../lib/defi/swap";
 import { CCTPService } from "../lib/defi/cctp-integration";
-import { arcTestnet, arcMainnet } from "../config/chains";
+import { arcTestnet, arcMainnet, sepoliaTestnet } from "../config/chains";
 
 export function SwapInterface() {
   const { primaryWallet } = useDynamicContext();
@@ -153,6 +153,8 @@ export function SwapInterface() {
           onChange={(e) => setSourceChain(e.target.value ? Number(e.target.value) : undefined)}
           className="w-full p-2 border border-gray-300 rounded-lg text-sm"
         >
+          <option value="">Select source chain...</option>
+          <option value={sepoliaTestnet.id}>Ethereum Sepolia (for CCTP)</option>
           <option value={arcTestnet.id}>Arc Testnet</option>
           <option value={arcMainnet.id}>Arc Mainnet</option>
         </select>

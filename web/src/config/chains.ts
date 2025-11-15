@@ -1,4 +1,8 @@
 import { defineChain } from "viem";
+import { sepolia } from "viem/chains";
+
+// Ethereum Sepolia Testnet (for CCTP testing)
+export const sepoliaTestnet = sepolia;
 
 // Arc Testnet chain definition (Official: Chain ID 5042002)
 export const arcTestnet = defineChain({

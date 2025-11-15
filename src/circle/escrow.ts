@@ -13,26 +13,39 @@ export class EscrowManager {
   constructor() {
     const env = loadEnv();
     
+    console.log("🔍 [ESCROW] Initializing Circle wallet client...");
+    console.log(`   CIRCLE_API_KEY: ${env.CIRCLE_API_KEY ? "✅ Set" : "❌ Missing"}`);
+    console.log(`   CIRCLE_ENTITY_SECRET: ${env.CIRCLE_ENTITY_SECRET ? "✅ Set" : "❌ Missing"}`);
+    console.log(`   CIRCLE_ENTITY_ID: ${env.CIRCLE_ENTITY_ID ? "✅ Set (deprecated)" : "❌ Missing"}`);
+    
     // Prefer SDK if CIRCLE_ENTITY_SECRET is available (recommended)
     if (env.CIRCLE_ENTITY_SECRET) {
       try {
+        console.log("🔍 [ESCROW] Attempting to initialize Circle Wallets SDK...");
         this.circleWallet = new CircleWalletSDKClient();
         this.useSDK = true;
         console.log("✅ [ESCROW] Using Circle Wallets SDK (recommended)");
       } catch (error: any) {
-        console.warn("⚠️ [ESCROW] SDK initialization failed, falling back to REST API:", error.message);
+        console.warn("⚠️ [ESCROW] SDK initialization failed, falling back to REST API:");
+        console.warn(`   Error: ${error.message}`);
+        console.warn(`   Stack: ${error.stack?.slice(0, 200)}`);
         // Fall back to REST API
         try {
+          console.log("🔍 [ESCROW] Attempting to initialize REST API client...");
           this.circleWallet = new CircleWalletClient();
           this.useSDK = false;
+          console.log("⚠️ [ESCROW] Using REST API (fallback)");
         } catch (restError: any) {
-          console.error("❌ [ESCROW] Both SDK and REST API initialization failed");
+          console.error("❌ [ESCROW] Both SDK and REST API initialization failed:");
+          console.error(`   SDK Error: ${error.message}`);
+          console.error(`   REST Error: ${restError.message}`);
           this.circleWallet = null;
         }
       }
     } else {
       // Use REST API if SDK not available
       try {
+        console.log("⚠️ [ESCROW] CIRCLE_ENTITY_SECRET not set, using REST API");
         this.circleWallet = new CircleWalletClient();
         this.useSDK = false;
         console.log("⚠️ [ESCROW] Using REST API (SDK recommended - set CIRCLE_ENTITY_SECRET)");

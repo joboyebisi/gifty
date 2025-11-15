@@ -165,30 +165,56 @@ export default function BirthdaysPage() {
   }, [isConnected, address, isTelegram, tgUser, API]);
 
   useEffect(() => {
-    if (user && (user.telegramHandle || user.email) && !showOnboarding) {
+    // Fetch birthdays if user is connected (even without handle/email)
+    // This ensures birthdays linked to wallet address are shown
+    if (user && !showOnboarding) {
+      setLoading(true);
       // Fetch upcoming birthdays (next 30 days)
       const queryParams = new URLSearchParams();
       if (address) queryParams.set("walletAddress", address);
       if (user.telegramUserId) queryParams.set("userId", user.telegramUserId);
       if (user.telegramHandle) queryParams.set("telegramHandle", user.telegramHandle);
+      if (dynamicUser?.email) queryParams.set("email", dynamicUser.email);
+      
+      console.log("🔍 Fetching birthdays with params:", queryParams.toString());
       
       fetch(`${API}/api/birthdays/upcoming?days=30&${queryParams.toString()}`)
         .then((res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          if (!res.ok) {
+            console.error(`❌ Failed to fetch birthdays: HTTP ${res.status}`);
+            throw new Error(`HTTP ${res.status}`);
+          }
           return res.json();
         })
+        .then((data) => {
+          console.log(`✅ Fetched ${data.birthdays?.length || 0} birthdays`);
+          setBirthdays(data.birthdays || []);
+        })
+        .catch((err) => {
+          console.error("❌ Error fetching birthdays:", err);
+          setBirthdays([]);
+        })
+        .finally(() => setLoading(false));
+    } else if (!showOnboarding && address) {
+      // Even if user object not loaded, try fetching by wallet address
+      setLoading(true);
+      const queryParams = new URLSearchParams();
+      queryParams.set("walletAddress", address);
+      
+      fetch(`${API}/api/birthdays/upcoming?days=30&${queryParams.toString()}`)
+        .then((res) => res.json())
         .then((data) => {
           setBirthdays(data.birthdays || []);
         })
         .catch((err) => {
-          console.error("Error fetching birthdays:", err);
+          console.error("Error fetching birthdays by wallet:", err);
           setBirthdays([]);
         })
         .finally(() => setLoading(false));
     } else if (!showOnboarding) {
       setLoading(false);
     }
-  }, [user, showOnboarding, address]);
+  }, [user, showOnboarding, address, dynamicUser?.email, API]);
 
   async function handleOnboarding() {
     if (!isConnected || !address) {

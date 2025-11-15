@@ -24,6 +24,7 @@ const nextConfig = {
       ...config.resolve.fallback,
       '@react-native-async-storage/async-storage': false,
       'pino-pretty': false,
+      'source-map': false, // Fix Vercel build error
     };
     
     // Ignore the private-next-instrumentation-client module (internal Next.js module)
@@ -53,6 +54,13 @@ const nextConfig = {
     config.plugins.push(
       new webpack.IgnorePlugin({
         resourceRegExp: /^pino-pretty$/,
+      })
+    );
+    
+    // Fix source-map module issue
+    config.plugins.push(
+      new webpack.IgnorePlugin({
+        resourceRegExp: /^next\/dist\/compiled\/source-map$/,
       })
     );
     
