@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
@@ -21,6 +21,7 @@ interface Birthday {
   visibility: string;
   source: string;
   createdAt: string;
+  daysUntil?: number;
 }
 
 interface User {
@@ -54,6 +55,18 @@ export default function BirthdaysPage() {
   const [sendingCode, setSendingCode] = useState(false);
   const [verifyingCode, setVerifyingCode] = useState(false);
   const [showEmailVerification, setShowEmailVerification] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 5;
+  const totalPages = useMemo(() => {
+    if (birthdays.length === 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(birthdays.length / pageSize));
+  }, [birthdays.length, pageSize]);
+  const paginatedBirthdays = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return birthdays.slice(start, start + pageSize);
+  }, [birthdays, currentPage, pageSize]);
 
   useEffect(() => {
     // Auto-populate Telegram handle if in Telegram
@@ -178,7 +191,7 @@ export default function BirthdaysPage() {
       
       console.log("🔍 Fetching birthdays with params:", queryParams.toString());
       
-      fetch(`${API}/api/birthdays/upcoming?days=30&${queryParams.toString()}`)
+      fetch(`${API}/api/birthdays/upcoming?days=0&${queryParams.toString()}`)
         .then((res) => {
           if (!res.ok) {
             console.error(`❌ Failed to fetch birthdays: HTTP ${res.status}`);
@@ -201,7 +214,7 @@ export default function BirthdaysPage() {
       const queryParams = new URLSearchParams();
       queryParams.set("walletAddress", address);
       
-      fetch(`${API}/api/birthdays/upcoming?days=30&${queryParams.toString()}`)
+      fetch(`${API}/api/birthdays/upcoming?days=0&${queryParams.toString()}`)
         .then((res) => res.json())
         .then((data) => {
           setBirthdays(data.birthdays || []);
@@ -215,6 +228,10 @@ export default function BirthdaysPage() {
       setLoading(false);
     }
   }, [user, showOnboarding, address, dynamicUser?.email, API]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [birthdays.length]);
 
   async function handleOnboarding() {
     if (!isConnected || !address) {
@@ -318,6 +335,23 @@ export default function BirthdaysPage() {
     }
     const msPerDay = 1000 * 60 * 60 * 24;
     return Math.ceil((bday.getTime() - today.getTime()) / msPerDay);
+  }
+
+  function formatRelativeLabel(daysUntil?: number): string | null {
+    if (daysUntil === undefined || Number.isNaN(daysUntil)) {
+      return null;
+    }
+    if (daysUntil === 0) {
+      return "Today";
+    }
+    if (daysUntil === 1) {
+      return "in 1 day";
+    }
+    if (daysUntil < 30) {
+      return `in ${daysUntil} days`;
+    }
+    const months = Math.round(daysUntil / 30);
+    return `in ${months} month${months === 1 ? "" : "s"}`;
   }
 
   if (!isConnected) {
@@ -522,61 +556,115 @@ export default function BirthdaysPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {birthdays.map((b) => {
-            const daysUntil = getDaysUntil(b.month, b.day);
-            const isSelected = selected.has(b.id);
-            return (
-              <div
-                key={b.id}
-                className={`tg-card p-4 transition-colors ${isSelected ? "bg-blue-50 border-blue-300" : ""}`}
+          {birthdays.length === 0 ? (
+            <div className="tg-card p-6 text-center">
+              <p className="text-sm text-gray-700 mb-4">No birthdays yet. Add one to get started!</p>
+              <button
+                onClick={() => router.push("/birthdays/add")}
+                className="tg-button-primary text-sm"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm">
-                        {b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend"}
-                      </span>
-                      {isSelected && <span className="text-blue-600 text-xs">✓</span>}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <span>{formatDate(b.month, b.day)}</span>
-                      {daysUntil === 0 && <span className="text-orange-600 font-semibold">🎂 Today!</span>}
-                      {daysUntil > 0 && daysUntil <= 7 && <span className="text-orange-500">in {daysUntil} days</span>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 ml-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(b.id);
-                      }}
-                      className={`text-xs px-3 py-1 rounded ${
-                        isSelected
-                          ? "bg-blue-100 text-blue-700 border border-blue-300"
-                          : "bg-gray-100 text-gray-700 border border-gray-300"
-                      }`}
-                    >
-                      {isSelected ? "✓" : "Select"}
-                    </button>
-                  </div>
-                </div>
-                {/* Send Gift CTA below each birthday entry */}
-                <div className="mt-3 pt-3 border-t border-gray-200">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const handle = b.telegramHandle || b.email || "";
-                      const name = b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend";
-                      router.push(`/gifts?recipients=${encodeURIComponent(handle)}&from=birthday&birthdayId=${b.id}&name=${encodeURIComponent(name)}`);
-                    }}
-                    className="tg-button-primary w-full text-sm"
+                ➕ Add Birthday
+              </button>
+            </div>
+          ) : (
+            <>
+              {paginatedBirthdays.map((b) => {
+                const daysUntil = b.daysUntil ?? getDaysUntil(b.month, b.day);
+                const relativeLabel = formatRelativeLabel(daysUntil);
+                const isSelected = selected.has(b.id);
+                return (
+                  <div
+                    key={b.id}
+                    className={`tg-card p-4 transition-colors ${isSelected ? "bg-blue-50 border-blue-300" : ""}`}
                   >
-                    🎁 Send Gift to {b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend"}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm">
+                            {b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend"}
+                          </span>
+                          {isSelected && <span className="text-blue-600 text-xs">✓</span>}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-600">
+                          <span>{formatDate(b.month, b.day)}</span>
+                          {relativeLabel && (
+                            <span
+                              className={
+                                daysUntil === 0
+                                  ? "text-orange-600 font-semibold"
+                                  : "text-gray-500"
+                              }
+                            >
+                              {relativeLabel}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 ml-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleSelect(b.id);
+                          }}
+                          className={`text-xs px-3 py-1 rounded ${
+                            isSelected
+                              ? "bg-blue-100 text-blue-700 border border-blue-300"
+                              : "bg-gray-100 text-gray-700 border border-gray-300"
+                          }`}
+                        >
+                          {isSelected ? "✓" : "Select"}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Send Gift CTA below each birthday entry */}
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const handle = b.telegramHandle || b.email || "";
+                          const name = b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend";
+                          router.push(`/gifts?recipients=${encodeURIComponent(handle)}&from=birthday&birthdayId=${b.id}&name=${encodeURIComponent(name)}`);
+                        }}
+                        className="tg-button-primary w-full text-sm"
+                      >
+                        🎁 Send Gift to {b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend"}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className={`text-xs px-3 py-1 rounded border ${
+                      currentPage === 1
+                        ? "bg-gray-100 text-gray-400 border-gray-200"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                  >
+                    ← Previous
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className={`text-xs px-3 py-1 rounded border ${
+                      currentPage === totalPages
+                        ? "bg-gray-100 text-gray-400 border-gray-200"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                  >
+                    Next →
                   </button>
                 </div>
-              </div>
-            );
-          })}
+              )}
+            </>
+          )}
         </div>
       )}
 

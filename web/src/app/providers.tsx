@@ -104,7 +104,7 @@ export function Providers({ children }: { children: ReactNode }) {
         walletConnectors: [EthereumWalletConnectors],
         // Configure to use Arc as primary chain
         appName: "Gifty",
-        appLogoUrl: "/logo.png",
+        appLogoUrl: "https://gifty-peach.vercel.app/logo.png",
         // Override default chain to Arc
         overrides: {
           evmNetworks: [

@@ -11,6 +11,7 @@ export interface Birthday {
   visibility: string;
   source: string;
   createdAt: string;
+  daysUntil?: number;
 }
 
 export async function getUpcomingBirthdays(
@@ -69,22 +70,23 @@ export async function getUpcomingBirthdays(
     return [];
   }
 
-  // Filter to next N days, handling year boundaries
+  // Calculate days until each birthday (handles year boundaries) and optionally filter by days
+  const includeAll = !days || days <= 0;
   const upcoming: Birthday[] = [];
   const todayTime = today.getTime();
-  
+
   for (const b of data) {
     // Calculate birthday date for this year
     let bdayDate = new Date(currentYear, b.month - 1, b.day);
-    
+
     // If birthday already passed this year, use next year
     if (bdayDate.getTime() < todayTime) {
       bdayDate = new Date(currentYear + 1, b.month - 1, b.day);
     }
-    
+
     const daysUntil = Math.ceil((bdayDate.getTime() - todayTime) / (1000 * 60 * 60 * 24));
-    
-    if (daysUntil >= 0 && daysUntil <= days) {
+
+    if (includeAll || (daysUntil >= 0 && daysUntil <= days)) {
       upcoming.push({
         id: b.id,
         userId: b.user_id,
@@ -96,21 +98,16 @@ export async function getUpcomingBirthdays(
         visibility: b.visibility,
         source: b.source,
         createdAt: b.created_at,
+        daysUntil,
       });
     }
   }
 
   // Sort by days until (closest first)
   upcoming.sort((a, b) => {
-    const aDate = new Date(currentYear, a.month - 1, a.day);
-    if (aDate.getTime() < todayTime) {
-      aDate.setFullYear(currentYear + 1);
-    }
-    const bDate = new Date(currentYear, b.month - 1, b.day);
-    if (bDate.getTime() < todayTime) {
-      bDate.setFullYear(currentYear + 1);
-    }
-    return aDate.getTime() - bDate.getTime();
+    const aDays = a.daysUntil ?? 0;
+    const bDays = b.daysUntil ?? 0;
+    return aDays - bDays;
   });
 
   return upcoming;
@@ -156,6 +153,7 @@ export async function createBirthday(data: {
     visibility: birthday.visibility,
     source: birthday.source,
     createdAt: birthday.created_at,
+    daysUntil: 0,
   };
 }
 
@@ -165,6 +163,14 @@ export async function getBirthdayById(birthdayId: string): Promise<Birthday | nu
 
   const { data, error } = await sb.from("birthdays").select("*").eq("id", birthdayId).single();
   if (error || !data) return null;
+
+  const today = new Date();
+  const currentYear = today.getFullYear();
+  let bdayDate = new Date(currentYear, data.month - 1, data.day);
+  if (bdayDate.getTime() < today.getTime()) {
+    bdayDate = new Date(currentYear + 1, data.month - 1, data.day);
+  }
+  const daysUntil = Math.ceil((bdayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
   return {
     id: data.id,
@@ -177,6 +183,7 @@ export async function getBirthdayById(birthdayId: string): Promise<Birthday | nu
     visibility: data.visibility,
     source: data.source,
     createdAt: data.created_at,
+    daysUntil,
   };
 }
 

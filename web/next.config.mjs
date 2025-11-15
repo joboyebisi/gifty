@@ -7,6 +7,8 @@ const __dirname = path.dirname(__filename);
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Disable source maps to prevent runtime errors
+  productionBrowserSourceMaps: false,
   // Fix workspace root detection issue with multiple lockfiles
   // Set to the project root (gifty directory) to avoid reading C:\Users\Deborah\package.json
   outputFileTracingRoot: path.resolve(__dirname, '..'),
@@ -16,6 +18,7 @@ const nextConfig = {
       '**/node_modules/**',
       '**/.next/**',
       'C:/Users/Deborah/**',
+      '**/next/dist/compiled/source-map/**',
     ],
   },
   webpack: (config, { isServer, webpack }) => {
@@ -24,7 +27,6 @@ const nextConfig = {
       ...config.resolve.fallback,
       '@react-native-async-storage/async-storage': false,
       'pino-pretty': false,
-      'source-map': false, // Fix Vercel build error
     };
     
     // Ignore the private-next-instrumentation-client module (internal Next.js module)
@@ -57,12 +59,16 @@ const nextConfig = {
       })
     );
     
-    // Fix source-map module issue
-    config.plugins.push(
-      new webpack.IgnorePlugin({
-        resourceRegExp: /^next\/dist\/compiled\/source-map$/,
-      })
-    );
+    // CRITICAL FIX: Create a shim for the missing source-map module
+    // This prevents Next.js from crashing when it tries to require this module
+    if (isServer) {
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(
+          /^next\/dist\/compiled\/source-map$/,
+          path.resolve(__dirname, 'webpack-source-map-shim.js')
+        )
+      );
+    }
     
     return config;
   },

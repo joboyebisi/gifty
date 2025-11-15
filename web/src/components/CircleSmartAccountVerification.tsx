@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useWalletClient } from "wagmi";
 import { createCircleSmartAccountFromDynamic } from "../lib/circle-smart-account";
 
 /**
@@ -10,7 +9,6 @@ import { createCircleSmartAccountFromDynamic } from "../lib/circle-smart-account
  */
 export function CircleSmartAccountVerification() {
   const { primaryWallet } = useDynamicContext();
-  const { data: walletClient } = useWalletClient();
   const [status, setStatus] = useState<"checking" | "success" | "error">("checking");
   const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,42 +24,54 @@ export function CircleSmartAccountVerification() {
     // Wait a bit for wagmi to initialize after Dynamic wallet connects
     // This is a known issue - wagmi needs time to sync with Dynamic's wallet
     let timeoutId: NodeJS.Timeout;
-    
+
     async function verifyCircleSmartAccount() {
-      if (!walletClient) {
+      const wallet = primaryWallet;
+      if (!wallet) {
         setStatus("error");
-        setError("Wallet client not ready. Please refresh the page if this persists.");
-        console.error("❌ Circle Smart Account verification: walletClient is null");
+        setError("Dynamic wallet not connected");
+        console.error("❌ Circle Smart Account verification: wallet instance missing");
         return;
       }
 
+      let dynamicWalletClient: any = null;
       try {
         const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
-        
+
         if (!clientKey) {
           setStatus("error");
-          setError("NEXT_PUBLIC_CIRCLE_CLIENT_KEY not configured in Vercel environment variables");
+          setError("Circle API configuration missing. Please contact support.");
           console.error("❌ Circle Smart Account verification: Client Key missing");
           return;
         }
 
+        // Dynamic exposes a getWalletClient helper
+        dynamicWalletClient = await (wallet as any).getWalletClient?.();
+
+        if (!dynamicWalletClient) {
+          setStatus("error");
+          setError("Wallet connection issue. Please reconnect your wallet.");
+          console.error("❌ Circle Smart Account verification: dynamic wallet client unavailable");
+          return;
+        }
+
         console.log("🔍 Verifying Circle Smart Account...", {
-          hasWalletClient: !!walletClient,
-          hasAddress: !!primaryWallet?.address,
-          address: primaryWallet?.address?.slice(0, 10) + "...",
+          hasWalletClient: !!dynamicWalletClient,
+          hasAddress: !!wallet.address,
+          address: wallet.address?.slice(0, 10) + "...",
         });
 
         // Try to create Circle Smart Account
-        const smartAccount = await createCircleSmartAccountFromDynamic(walletClient);
+        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
         const address = smartAccount.address;
-        
+
         setSmartAccountAddress(address);
         setStatus("success");
         console.log("✅ Circle Smart Account verified:", address);
       } catch (err: any) {
         setStatus("error");
         let userFriendlyError = "Unable to set up gasless transactions";
-        
+
         // Provide user-friendly error messages
         if (err.message?.includes("NEXT_PUBLIC_CIRCLE_CLIENT_KEY")) {
           userFriendlyError = "Circle API configuration missing. Please contact support.";
@@ -76,14 +86,14 @@ export function CircleSmartAccountVerification() {
         } else {
           userFriendlyError = "Unable to set up gasless transactions. Standard transactions will still work.";
         }
-        
+
         setError(userFriendlyError);
         console.error("❌ Circle Smart Account verification failed:", {
           error: err.message,
           stack: err.stack,
           name: err.name,
-          hasWalletClient: !!walletClient,
-          hasAddress: !!primaryWallet?.address,
+          hasWalletClient: !!dynamicWalletClient,
+          hasAddress: !!wallet.address,
           userFriendlyError,
         });
       }
@@ -97,7 +107,7 @@ export function CircleSmartAccountVerification() {
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [primaryWallet?.address, walletClient]);
+  }, [primaryWallet?.address]);
 
   if (!primaryWallet?.address) {
     return null;
