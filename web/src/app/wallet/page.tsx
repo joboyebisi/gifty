@@ -240,32 +240,18 @@ export default function WalletPage() {
         </button>
       </div>
 
-      {/* Circle Wallet Status */}
-      {circleWalletId ? (
-        <div className="tg-card p-3 mb-4 bg-green-50 border border-green-200">
-          <div className="text-xs text-green-800">
-            <strong>✅ Circle Wallet Ready</strong>
-            <div className="font-mono text-xs mt-1 break-all">{circleWalletId.slice(0, 20)}...</div>
-            <div className="text-xs text-green-600 mt-1">You can use fiat funding</div>
-          </div>
-        </div>
-      ) : (
-        <div className="tg-card p-3 mb-4 bg-yellow-50 border border-yellow-200">
-          <div className="text-xs text-yellow-800 mb-2">
-            <strong>⚠️ Circle Wallet Not Set Up</strong>
-            <div className="text-xs text-yellow-600 mt-1">
-              Create a Circle wallet to enable fiat funding
-            </div>
-          </div>
-          <button
-            onClick={createCircleWallet}
-            disabled={creatingCircleWallet}
-            className="tg-button-primary w-full text-xs"
-          >
-            {creatingCircleWallet ? "Creating..." : "🔧 Create Circle Wallet"}
-          </button>
-        </div>
-      )}
+             {/* Circle Smart Account Info */}
+             <div className="tg-card p-3 mb-4 bg-blue-50 border border-blue-200">
+               <div className="text-xs text-blue-800">
+                 <strong>💡 About Circle Integration</strong>
+                 <div className="text-xs text-blue-600 mt-1">
+                   • Your Dynamic wallet can receive funds directly<br/>
+                   • Circle Smart Accounts enable gasless transactions (optional)<br/>
+                   • Circle onramp works with any wallet address<br/>
+                   • No Circle developer wallet needed for fiat funding
+                 </div>
+               </div>
+             </div>
 
       {/* Actions */}
       <div className="space-y-2 mb-4">
@@ -278,15 +264,7 @@ export default function WalletPage() {
             onClick={async () => {
               if (!primaryWallet?.address) return;
               
-              if (!circleWalletId) {
-                const create = confirm("⚠️ Circle wallet not found. Create one now to enable fiat funding?\n\n(You can also fund directly on-chain using faucets)");
-                if (create) {
-                  await createCircleWallet();
-                  return;
-                }
-                alert("💵 On-Chain Funding\n\nYou can fund directly on-chain:\n\n• Sepolia: Use faucets to get ETH and USDC\n• Arc Testnet: Use faucets to get USDC\n\nOr create a Circle wallet for fiat funding.");
-                return;
-              }
+              // No Circle wallet needed - Dynamic wallet works directly
               
               const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
               try {

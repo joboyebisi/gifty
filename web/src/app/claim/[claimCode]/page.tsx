@@ -90,12 +90,13 @@ export default function ClaimPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API}/api/gifts/${gift.id}/claim`, {
+      // Use the execute endpoint with claim code (not gift ID)
+      const res = await fetch(`${API}/api/gifts/claim/${claimCode}/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           walletAddress: primaryWallet.address,
-          claimSecret: claimSecret || undefined,
+          secret: claimSecret || undefined,
         }),
       });
 
@@ -108,6 +109,7 @@ export default function ClaimPage() {
         setError(data.error || "Failed to claim gift");
       }
     } catch (err: any) {
+      console.error("Claim error:", err);
       setError(err?.message || "Failed to claim gift");
     } finally {
       setClaiming(false);

@@ -564,15 +564,149 @@ app.get("/api/birthdays/upcoming", async (req: any, res: any) => {
   }
 });
 
+// Get user's birthdays (all, not just upcoming)
+app.get("/api/birthdays", async (req: any, res: any) => {
+  try {
+    const { userId, telegramHandle, walletAddress } = req.query;
+    
+    const sb = getSupabase();
+    if (!sb) {
+      return res.status(500).json({ error: "Database not configured" });
+    }
+
+    let query = sb.from("birthdays").select("*");
+    
+    // Filter by user identifier
+    if (userId) {
+      query = query.eq("user_id", userId);
+    } else if (telegramHandle) {
+      query = query.eq("telegram_handle", telegramHandle.replace("@", ""));
+    } else if (walletAddress) {
+      // Get user first, then their birthdays
+      const { getUserByWallet } = await import("./users/users");
+      const user = await getUserByWallet(walletAddress);
+      if (user?.telegramUserId) {
+        query = query.eq("user_id", user.telegramUserId);
+      } else if (user?.telegramHandle) {
+        query = query.eq("telegram_handle", user.telegramHandle);
+      } else {
+        return res.json({ birthdays: [] });
+      }
+    } else {
+      return res.status(400).json({ error: "userId, telegramHandle, or walletAddress required" });
+    }
+
+    const { data, error } = await query.order("month", { ascending: true }).order("day", { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    const birthdays = (data || []).map((b: any) => ({
+      id: b.id,
+      userId: b.user_id,
+      telegramHandle: b.telegram_handle,
+      email: b.email,
+      month: b.month,
+      day: b.day,
+      year: b.year,
+      visibility: b.visibility,
+      source: b.source,
+      createdAt: b.created_at,
+    }));
+
+    res.json({ birthdays });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "failed" });
+  }
+});
+
 // Create birthday
 app.post("/api/birthdays", async (req: any, res: any) => {
   try {
-    const { userId, telegramHandle, email, month, day, year, visibility } = (req as any).body || {};
+    const { userId, telegramHandle, email, name, month, day, year, visibility, relationship } = (req as any).body || {};
     if (!month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
       return res.status(400).json({ error: "Valid month (1-12) and day (1-31) required" });
     }
+    if (!telegramHandle && !email && !name) {
+      return res.status(400).json({ error: "telegramHandle, email, or name required" });
+    }
+    
     const birthday = await createBirthday({ userId, telegramHandle, email, month, day, year, visibility });
     res.json({ birthday });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "failed" });
+  }
+});
+
+// Update birthday
+app.put("/api/birthdays/:id", async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { month, day, year, telegramHandle, email, name, visibility } = (req as any).body || {};
+    
+    const sb = getSupabase();
+    if (!sb) {
+      return res.status(500).json({ error: "Database not configured" });
+    }
+
+    const updateData: any = {
+      updated_at: new Date().toISOString(),
+    };
+    if (month !== undefined) updateData.month = month;
+    if (day !== undefined) updateData.day = day;
+    if (year !== undefined) updateData.year = year;
+    if (telegramHandle !== undefined) updateData.telegram_handle = telegramHandle;
+    if (email !== undefined) updateData.email = email;
+    if (visibility !== undefined) updateData.visibility = visibility;
+
+    const { data, error } = await sb
+      .from("birthdays")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return res.status(404).json({ error: "Birthday not found" });
+    }
+
+    res.json({
+      birthday: {
+        id: data.id,
+        userId: data.user_id,
+        telegramHandle: data.telegram_handle,
+        email: data.email,
+        month: data.month,
+        day: data.day,
+        year: data.year,
+        visibility: data.visibility,
+        source: data.source,
+        createdAt: data.created_at,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "failed" });
+  }
+});
+
+// Delete birthday
+app.delete("/api/birthdays/:id", async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    
+    const sb = getSupabase();
+    if (!sb) {
+      return res.status(500).json({ error: "Database not configured" });
+    }
+
+    const { error } = await sb.from("birthdays").delete().eq("id", id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true, message: "Birthday deleted" });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
   }
@@ -953,6 +1087,9 @@ app.post("/api/wallet/circle-id", async (req: any, res: any) => {
 });
 
 // Create Circle wallet for user (auto-creation)
+// NOTE: Circle developer-controlled wallets are NOT needed for fiat funding
+// Circle onramp works directly with Dynamic wallet addresses
+// This endpoint is kept for future use cases (e.g., escrow wallets)
 app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
   try {
     const { walletAddress, telegramUserId, telegramHandle } = (req as any).body || {};
@@ -970,7 +1107,7 @@ app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
     
     // Create user if doesn't exist
     if (!user) {
-      console.log(`📝 Auto-creating user for Circle wallet: ${walletAddress?.slice(0, 6) || telegramUserId}...`);
+      console.log(`📝 Auto-creating user: ${walletAddress?.slice(0, 6) || telegramUserId}...`);
       user = await createOrUpdateUser({
         walletAddress,
         telegramUserId,
@@ -978,39 +1115,21 @@ app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
       });
     }
 
-    // If user already has Circle wallet, return it
-    if (user.circleWalletId) {
-      return res.json({ 
-        circleWalletId: user.circleWalletId,
-        message: "Circle wallet already exists",
-        user,
-      });
-    }
-
-    // Create new Circle wallet
-    const { CircleWalletClient } = await import("./circle/wallet");
-    const circleClient = new CircleWalletClient();
-    const circleWallet = await circleClient.createWallet();
-
-    console.log(`✅ Created Circle wallet ${circleWallet.id} for user ${user.id}`);
-
-    // Update user with Circle wallet ID
-    const updatedUser = await createOrUpdateUser({
-      walletAddress: user.walletAddress,
-      telegramHandle: user.telegramHandle,
-      email: user.email,
-      telegramUserId: user.telegramUserId,
-      circleWalletId: circleWallet.id,
-    });
-
+    // IMPORTANT: Circle developer-controlled wallets are NOT required for fiat funding
+    // Circle onramp can fund any wallet address directly (including Dynamic wallets)
+    // Circle Smart Accounts (for gasless transactions) are separate and use Circle Client Key
+    
+    // For now, return success without creating Circle wallet
+    // Circle wallets are only needed for specific use cases (escrow, etc.)
     res.json({ 
-      circleWalletId: circleWallet.id,
-      user: updatedUser,
-      message: "Circle wallet created successfully" 
+      message: "User account ready. Your Dynamic wallet can receive funds directly.",
+      note: "Circle developer-controlled wallets are not needed for fiat funding. Circle onramp works with any wallet address.",
+      user,
+      walletAddress: user.walletAddress,
     });
   } catch (err: any) {
-    console.error("Error creating Circle wallet:", err);
-    res.status(500).json({ error: err?.message || "Failed to create Circle wallet" });
+    console.error("Error in wallet setup:", err);
+    res.status(500).json({ error: err?.message || "Failed to set up wallet" });
   }
 });
 
@@ -1275,6 +1394,7 @@ app.get("/api/cctp/status/:transferId", async (req: any, res: any) => {
 });
 
 // Onramp: Get wire instructions for funding wallet (fiat to crypto)
+// Note: Circle onramp can work directly with any wallet address (Dynamic wallet is fine)
 app.post("/api/onramp/wire-instructions", async (req: any, res: any) => {
   try {
     const { walletAddress, currency = "USD" } = req.body;
@@ -1282,28 +1402,34 @@ app.post("/api/onramp/wire-instructions", async (req: any, res: any) => {
       return res.status(400).json({ error: "walletAddress required" });
     }
 
-    // Get user to find their Circle wallet ID
-    const user = await getUserByWallet(walletAddress);
-    if (!user?.circleWalletId) {
-      return res.status(400).json({ 
-        error: "Circle wallet not found. Please set up your Circle wallet first.",
-        requiresCircleWallet: true,
-      });
-    }
-
-    // For now, return instructions on how to fund
-    // In production, this would link a bank account and return wire instructions
+    // For fiat funding, we can use Circle's onramp API directly with the Dynamic wallet address
+    // No need for Circle developer-controlled wallets - that's a different use case
+    
+    // In production, this would use Circle's onramp widget or API
+    // For now, return instructions for on-chain funding (testnet)
     res.json({
-      message: "To fund your wallet with fiat:",
+      message: "Fund your wallet:",
       instructions: [
-        "1. Link a bank account using Circle's API",
-        "2. Get wire instructions for your Circle wallet",
-        "3. Transfer funds from your bank to Circle",
-        "4. Circle will convert to USDC and deposit to your wallet",
+        "💵 Fiat Funding (Coming Soon):",
+        "  • Circle onramp will support direct funding to your Dynamic wallet",
+        "  • No Circle wallet needed - your Dynamic wallet works!",
+        "",
+        "🪙 On-Chain Funding (Available Now):",
+        "  • Sepolia Testnet: Use faucets to get ETH and USDC",
+        "  • Arc Testnet: Use faucets to get USDC",
+        "  • Send USDC directly to your wallet address above",
       ],
-      note: "This feature requires Circle Mint account setup. For now, you can fund directly on-chain using testnet faucets.",
+      note: "Your Dynamic wallet address can receive funds directly. Circle Smart Accounts (for gasless transactions) are separate and optional.",
       walletAddress,
-      circleWalletId: user.circleWalletId,
+      onChainFunding: {
+        sepolia: {
+          ethFaucet: "https://sepoliafaucet.com",
+          usdcFaucet: "https://app.uniswap.org/faucet/sepolia",
+        },
+        arc: {
+          usdcFaucet: "https://faucet.arc.network",
+        },
+      },
     });
   } catch (err: any) {
     console.error("Onramp wire instructions error:", err);

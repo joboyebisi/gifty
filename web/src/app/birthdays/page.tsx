@@ -161,7 +161,13 @@ export default function BirthdaysPage() {
 
   useEffect(() => {
     if (user && (user.telegramHandle || user.email) && !showOnboarding) {
-      fetch(`${API}/api/birthdays/upcoming?days=30`)
+      // Fetch upcoming birthdays (next 30 days)
+      const queryParams = new URLSearchParams();
+      if (address) queryParams.set("walletAddress", address);
+      if (user.telegramUserId) queryParams.set("userId", user.telegramUserId);
+      if (user.telegramHandle) queryParams.set("telegramHandle", user.telegramHandle);
+      
+      fetch(`${API}/api/birthdays/upcoming?days=30&${queryParams.toString()}`)
         .then((res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -177,7 +183,7 @@ export default function BirthdaysPage() {
     } else if (!showOnboarding) {
       setLoading(false);
     }
-  }, [user, showOnboarding]);
+  }, [user, showOnboarding, address]);
 
   async function handleOnboarding() {
     if (!isConnected || !address) {
@@ -462,8 +468,22 @@ export default function BirthdaysPage() {
               ? "Add birthdays to see them here, or we'll fetch them from your contacts."
               : "Add your Telegram handle or email in your profile to see birthdays from your contacts."}
           </p>
+          <div className="flex flex-col gap-2 mb-4">
+            <button 
+              onClick={() => router.push("/birthdays/add")} 
+              className="tg-button-primary text-sm"
+            >
+              ➕ Add Birthday
+            </button>
+            <button 
+              onClick={() => router.push("/gifts")} 
+              className="tg-button-secondary text-sm"
+            >
+              🎁 Send Gift
+            </button>
+          </div>
           {(!user?.telegramHandle && !user?.email) && (
-            <button onClick={() => setShowOnboarding(true)} className="tg-button-primary text-sm mb-2">
+            <button onClick={() => setShowOnboarding(true)} className="tg-button-secondary text-xs mb-2">
               Complete Profile (Optional)
             </button>
           )}
@@ -527,7 +547,7 @@ export default function BirthdaysPage() {
 
       <div className="mt-4 flex gap-2">
         <Link href="/" className="tg-button-secondary text-center flex-1 text-sm">← Home</Link>
-        <Link href="/claim" className="tg-button-primary text-center flex-1 text-sm">🎁 Claim Gift</Link>
+        <Link href="/gifts" className="tg-button-primary text-center flex-1 text-sm">🎁 Claim Gift</Link>
       </div>
     </div>
   );
