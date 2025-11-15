@@ -527,17 +527,21 @@ export default function BirthdaysPage() {
                     >
                       {isSelected ? "✓" : "Select"}
                     </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const handle = b.telegramHandle || b.email || "";
-                        router.push(`/gifts?recipients=${encodeURIComponent(handle)}&from=birthday&birthdayId=${b.id}`);
-                      }}
-                      className="tg-button-primary text-xs px-3 py-1"
-                    >
-                      🎁 Send Gift
-                    </button>
                   </div>
+                </div>
+                {/* Send Gift CTA below each birthday entry */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const handle = b.telegramHandle || b.email || "";
+                      const name = b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend";
+                      router.push(`/gifts?recipients=${encodeURIComponent(handle)}&from=birthday&birthdayId=${b.id}&name=${encodeURIComponent(name)}`);
+                    }}
+                    className="tg-button-primary w-full text-sm"
+                  >
+                    🎁 Send Gift to {b.telegramHandle ? `@${b.telegramHandle}` : b.email || "Friend"}
+                  </button>
                 </div>
               </div>
             );

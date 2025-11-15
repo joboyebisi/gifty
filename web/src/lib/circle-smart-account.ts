@@ -26,7 +26,9 @@ export async function createCircleSmartAccountFromDynamic(
 
   if (!clientKey) {
     throw new Error(
-      "NEXT_PUBLIC_CIRCLE_CLIENT_KEY is required. Get it from Circle Console → Keys → Create Client Key"
+      "NEXT_PUBLIC_CIRCLE_CLIENT_KEY is REQUIRED for gasless transactions. " +
+      "Get it from Circle Console → Keys → Create Client Key. " +
+      "Without this, transactions will fail."
     );
   }
 

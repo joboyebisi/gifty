@@ -7,12 +7,23 @@ import Link from "next/link";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+interface Birthday {
+  id: string;
+  telegramHandle?: string;
+  email?: string;
+  month: number;
+  day: number;
+  year?: number;
+  createdAt: string;
+}
+
 export default function AddBirthdayPage() {
   const router = useRouter();
   const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const { isTelegram, user: tgUser } = useTelegram();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createdBirthday, setCreatedBirthday] = useState<Birthday | null>(null);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -57,7 +68,8 @@ export default function AddBirthdayPage() {
       const data = await res.json();
 
       if (res.ok && data.birthday) {
-        router.push("/birthdays");
+        setCreatedBirthday(data.birthday);
+        // Don't redirect - show success state with CTA
       } else {
         setError(data.error || "Failed to add birthday");
       }
@@ -66,6 +78,87 @@ export default function AddBirthdayPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function formatDate(month: number, day: number, year?: number): string {
+    const date = new Date(year || 2024, month - 1, day);
+    return date.toLocaleDateString("en-US", { 
+      month: "long", 
+      day: "numeric",
+      ...(year ? { year: "numeric" } : {})
+    });
+  }
+
+  function getBirthdayName(): string {
+    if (formData.name) return formData.name;
+    if (formData.telegramHandle) return `@${formData.telegramHandle}`;
+    if (formData.email) return formData.email;
+    return "Friend";
+  }
+
+  // Show success state with CTA
+  if (createdBirthday) {
+    const birthdayName = getBirthdayName();
+    const recipientHandle = formData.telegramHandle || formData.email || "";
+    
+    return (
+      <div className="tg-viewport max-w-md mx-auto px-4 py-4">
+        <div className="tg-card p-6 text-center mb-4">
+          <div className="text-4xl mb-4">✅</div>
+          <h2 className="text-xl font-bold mb-2">Birthday Added!</h2>
+          <div className="text-sm text-gray-700 mb-4">
+            <p className="font-semibold">{birthdayName}</p>
+            <p className="text-gray-600">
+              {formatDate(createdBirthday.month, createdBirthday.day, createdBirthday.year)}
+            </p>
+          </div>
+        </div>
+
+        <div className="tg-card p-4 mb-4 bg-blue-50 border border-blue-200">
+          <p className="text-sm text-blue-900 mb-3">
+            <strong>🎁 Send a gift to {birthdayName}?</strong>
+          </p>
+          <button
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (recipientHandle) params.set("recipients", recipientHandle);
+              params.set("from", "birthday");
+              params.set("birthdayId", createdBirthday.id);
+              router.push(`/gifts?${params.toString()}`);
+            }}
+            className="tg-button-primary w-full text-sm"
+          >
+            🎁 Send Gift to {birthdayName}
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push("/birthdays")}
+            className="tg-button-secondary flex-1 text-sm"
+          >
+            ← Back to Birthdays
+          </button>
+          <button
+            onClick={() => {
+              setCreatedBirthday(null);
+              setFormData({
+                name: "",
+                telegramHandle: "",
+                email: "",
+                month: new Date().getMonth() + 1,
+                day: new Date().getDate(),
+                year: undefined,
+                relationship: "friend",
+              });
+            }}
+            className="tg-button-secondary flex-1 text-sm"
+          >
+            ➕ Add Another
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

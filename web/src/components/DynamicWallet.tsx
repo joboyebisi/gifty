@@ -76,12 +76,12 @@ export function DynamicWallet() {
     }
   }, [primaryWallet?.address, isTelegram, tgUser?.username, tgUser?.id]);
 
-  // Auto-create Circle wallet when wallet connects
+  // Auto-create Circle Smart Account when wallet connects (REQUIRED for gasless transactions)
   useEffect(() => {
     if (primaryWallet?.address) {
       const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
       
-      // Create Circle wallet if user doesn't have one (non-blocking)
+      // Create user account (required for Circle Smart Account)
       fetch(`${API}/api/wallet/create-circle-wallet`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,14 +93,16 @@ export function DynamicWallet() {
       })
         .then((res) => res.json())
         .then((data) => {
-          if (data.circleWalletId) {
-            console.log("✅ Circle wallet ready:", data.circleWalletId.slice(0, 8) + "...");
+          if (data.user) {
+            console.log("✅ User account ready for Circle Smart Account");
           }
         })
         .catch((err) => {
-          console.error("Failed to create Circle wallet (non-critical):", err);
-          // Non-critical error - user can still use on-chain funding
+          console.error("Failed to create user account:", err);
         });
+      
+      // Note: Circle Smart Account is created client-side via CircleSmartWallet component
+      // This ensures gasless transactions work immediately
     }
   }, [primaryWallet?.address, isTelegram, tgUser?.id, tgUser?.username]);
 
