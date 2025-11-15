@@ -5,6 +5,7 @@ import { useTelegram } from "../../hooks/useTelegram";
 import { WalletBalance } from "../../components/WalletBalance";
 import { CircleSmartWallet } from "../../components/CircleSmartWallet";
 import { CircleSmartAccountVerification } from "../../components/CircleSmartAccountVerification";
+import { DualWalletDisplay } from "../../components/DualWalletDisplay";
 import Link from "next/link";
 
 interface BalanceData {
@@ -179,9 +180,15 @@ export default function WalletPage() {
         </div>
       </div>
 
-      {/* Balances */}
+      {/* Dual Wallet Display with Balances */}
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold mb-3">💼 Your Wallets</h3>
+        <DualWalletDisplay />
+      </div>
+
+      {/* Legacy Balance Display (for backward compatibility) */}
       <div className="tg-card p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-3">💰 Balances</h3>
+        <h3 className="text-lg font-semibold mb-3">💰 Quick Balance Check</h3>
         {loading && !balances ? (
           <div className="animate-pulse space-y-2">
             <div className="h-4 bg-gray-200 rounded w-3/4"></div>
@@ -240,6 +247,9 @@ export default function WalletPage() {
           {loading ? "Refreshing..." : "🔄 Refresh Balances"}
         </button>
       </div>
+
+             {/* Circle Smart Account Verification */}
+             <CircleSmartAccountVerification />
 
              {/* Circle Smart Account Info */}
              <div className="tg-card p-3 mb-4 bg-blue-50 border border-blue-200">

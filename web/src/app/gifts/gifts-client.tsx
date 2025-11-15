@@ -251,8 +251,9 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
       alert("Please connect your wallet first");
       return;
     }
-    if (!formData.recipientHandle && !formData.recipientEmail) {
-      alert("Please provide recipient handle or email");
+    // User only needs to provide ONE contact method
+    if (!formData.recipientHandle && !formData.recipientEmail && !formData.recipientPhone) {
+      alert("Please provide at least one contact method: Telegram handle, email, or phone number");
       return;
     }
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
@@ -392,8 +393,9 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
           </p>
           <button
             onClick={() => {
-              if (!formData.recipientHandle && !formData.recipientEmail) {
-                alert("Please provide at least recipient handle or email");
+              // User only needs to provide ONE contact method
+              if (!formData.recipientHandle && !formData.recipientEmail && !formData.recipientPhone) {
+                alert("Please provide at least one contact method: Telegram handle, email, or phone number");
                 return;
               }
               setStep("amount");

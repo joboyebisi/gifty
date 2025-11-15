@@ -39,8 +39,10 @@ export default function AddBirthdayPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    if (!formData.name && !formData.telegramHandle && !formData.email && !formData.phoneNumber) {
-      setError("Please enter a name, Telegram handle, email, or phone number");
+    // User only needs to provide ONE contact method (email OR telegram handle OR phone number)
+    // Name is optional but helpful
+    if (!formData.telegramHandle && !formData.email && !formData.phoneNumber) {
+      setError("Please provide at least one contact method: Telegram handle, email, or phone number");
       return;
     }
 
