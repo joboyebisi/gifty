@@ -674,17 +674,28 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
 // Get upcoming birthdays
 app.get("/api/birthdays/upcoming", async (req: any, res: any) => {
   try {
-    const days = req.query.days ? Number(req.query.days) : 7;
+    const days = req.query.days ? Number(req.query.days) : 30; // Default to 30 days
     const userId = req.query.userId;
     const walletAddress = req.query.walletAddress;
     const telegramHandle = req.query.telegramHandle;
     
+    console.log(`🔍 [BIRTHDAYS/API] Fetching upcoming birthdays:`, {
+      days,
+      userId,
+      walletAddress: walletAddress?.slice(0, 10) + "...",
+      telegramHandle,
+    });
+    
     // Get user's birthdays (filtered by user)
     const birthdays = await getUpcomingBirthdays(days, userId, walletAddress, telegramHandle);
+    
+    console.log(`✅ [BIRTHDAYS/API] Found ${birthdays.length} upcoming birthdays`);
+    
     res.json({ birthdays });
   } catch (err: any) {
-    console.error("Error fetching upcoming birthdays:", err);
-    res.status(500).json({ error: err?.message || "failed" });
+    console.error("❌ [BIRTHDAYS/API] Error fetching upcoming birthdays:", err);
+    console.error("Error details:", err.message, err.stack);
+    res.status(500).json({ error: err?.message || "Failed to fetch birthdays" });
   }
 });
 

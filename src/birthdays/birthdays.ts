@@ -14,7 +14,7 @@ export interface Birthday {
 }
 
 export async function getUpcomingBirthdays(
-  days: number = 7,
+  days: number = 30, // Default to 30 days to show more birthdays
   userId?: string,
   walletAddress?: string,
   telegramHandle?: string
@@ -44,12 +44,12 @@ export async function getUpcomingBirthdays(
       query = query.eq("telegram_handle", user.telegramHandle);
       console.log(`🔍 [BIRTHDAYS] Filtering by telegram_handle: ${user.telegramHandle} (from wallet ${walletAddress.slice(0, 10)}...)`);
     } else {
-      // No user found - try to find birthdays by wallet_address if column exists
-      // For now, also try to find birthdays without user_id (orphaned birthdays)
-      // This handles the case where birthday was created before user account
-      console.warn(`⚠️ [BIRTHDAYS] No user found for wallet ${walletAddress.slice(0, 10)}..., checking for orphaned birthdays...`);
-      // Try to find birthdays that might be linked via other means
-      // For now, return empty - user needs to be created first
+      // No user found - this shouldn't happen if user was auto-created when birthday was added
+      // But handle gracefully - try to create user now if we have wallet address
+      console.warn(`⚠️ [BIRTHDAYS] No user found for wallet ${walletAddress.slice(0, 10)}...`);
+      console.warn(`   This might mean the user wasn't created when the birthday was added.`);
+      console.warn(`   Returning empty array - user needs to be created first.`);
+      // Return empty - user will be created on next birthday creation
       return [];
     }
   } else if (telegramHandle) {

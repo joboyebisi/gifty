@@ -60,14 +60,31 @@ export function CircleSmartAccountVerification() {
         console.log("✅ Circle Smart Account verified:", address);
       } catch (err: any) {
         setStatus("error");
-        const errorMsg = err.message || "Failed to create Circle Smart Account";
-        setError(errorMsg);
+        let userFriendlyError = "Unable to set up gasless transactions";
+        
+        // Provide user-friendly error messages
+        if (err.message?.includes("NEXT_PUBLIC_CIRCLE_CLIENT_KEY")) {
+          userFriendlyError = "Circle API configuration missing. Please contact support.";
+        } else if (err.message?.includes("Client URL") || err.message?.includes("clientUrl")) {
+          userFriendlyError = "Circle API URL configuration issue. Please contact support.";
+        } else if (err.message?.includes("network") || err.message?.includes("Network")) {
+          userFriendlyError = "Network connection issue. Please check your internet and try again.";
+        } else if (err.message?.includes("timeout") || err.message?.includes("Timeout")) {
+          userFriendlyError = "Request timed out. Please refresh the page and try again.";
+        } else if (err.message?.includes("wallet") || err.message?.includes("Wallet")) {
+          userFriendlyError = "Wallet connection issue. Please reconnect your wallet.";
+        } else {
+          userFriendlyError = "Unable to set up gasless transactions. Standard transactions will still work.";
+        }
+        
+        setError(userFriendlyError);
         console.error("❌ Circle Smart Account verification failed:", {
           error: err.message,
           stack: err.stack,
           name: err.name,
           hasWalletClient: !!walletClient,
           hasAddress: !!primaryWallet?.address,
+          userFriendlyError,
         });
       }
     }
@@ -108,10 +125,10 @@ export function CircleSmartAccountVerification() {
       
       {status === "error" && (
         <div className="text-xs text-red-700">
-          <div className="font-semibold mb-1">❌ Circle Smart Account Error</div>
-          <div className="text-red-600">{error}</div>
-          <div className="mt-2 text-red-500">
-            Check that NEXT_PUBLIC_CIRCLE_CLIENT_KEY is set in Vercel environment variables.
+          <div className="font-semibold mb-1">⚠️ Gasless Transactions Unavailable</div>
+          <div className="text-red-600 mb-2">{error}</div>
+          <div className="text-red-500 text-xs">
+            Don't worry! You can still send gifts using standard transactions. Gasless transactions are optional.
           </div>
         </div>
       )}

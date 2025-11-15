@@ -74,12 +74,15 @@ async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<a
   });
 
   if (!response.ok) {
-    throw new Error(`RPC call failed: ${response.statusText}`);
+    const statusText = response.statusText || `HTTP ${response.status}`;
+    const errorText = await response.text().catch(() => statusText);
+    throw new Error(`RPC call failed: ${statusText} - ${errorText.slice(0, 100)}`);
   }
 
-  const data = await response.json() as { error?: { message: string }; result?: any };
+  const data = await response.json() as { error?: { message: string; code?: number }; result?: any };
   if (data.error) {
-    throw new Error(`RPC error: ${data.error.message}`);
+    const errorMsg = data.error.message || `Error code ${data.error.code || 'unknown'}`;
+    throw new Error(`RPC error: ${errorMsg}`);
   }
 
   return data.result;
@@ -142,11 +145,15 @@ export async function getOnChainUSDCBalance(
       balanceFormatted,
     };
   } catch (error: any) {
-    console.error("Error getting on-chain balance:", error);
+    const errorMsg = error.message || "Failed to fetch balance";
+    console.error(`❌ [BALANCE] Error getting on-chain USDC balance for ${address.slice(0, 10)}... on chain ${chainId}:`, errorMsg);
+    if (error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     return {
       balance: "0",
       balanceFormatted: "0.00",
-      error: error.message || "Failed to fetch balance",
+      error: errorMsg,
     };
   }
 }
@@ -183,11 +190,15 @@ export async function getNativeBalance(
       balanceFormatted,
     };
   } catch (error: any) {
-    console.error("Error getting native balance:", error);
+    const errorMsg = error.message || "Failed to fetch balance";
+    console.error(`❌ [BALANCE] Error getting native balance for ${address.slice(0, 10)}... on chain ${chainId}:`, errorMsg);
+    if (error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     return {
       balance: "0",
       balanceFormatted: "0.00",
-      error: error.message || "Failed to fetch balance",
+      error: errorMsg,
     };
   }
 }
