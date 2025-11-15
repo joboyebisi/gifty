@@ -21,10 +21,10 @@ const schema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   // Circle API
   CIRCLE_API_KEY: z.string().optional(),
-  CIRCLE_ENTITY_ID: z.string().optional(),
-  CIRCLE_ENTITY_SECRET: z.string().optional(),
-  CIRCLE_CLIENT_KEY: z.string().optional(), // For Modular Wallets SDK
-  CIRCLE_CLIENT_URL: z.string().optional(), // For Modular Wallets SDK
+  CIRCLE_ENTITY_ID: z.string().optional(), // Deprecated: Use CIRCLE_ENTITY_SECRET instead
+  CIRCLE_ENTITY_SECRET: z.string().optional(), // Required for Circle Wallets SDK
+  CIRCLE_CLIENT_KEY: z.string().optional(), // For Modular Wallets SDK (Smart Accounts)
+  CIRCLE_CLIENT_URL: z.string().optional(), // For Modular Wallets SDK (Smart Accounts)
   // Telegram Bot
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_BOT_SECRET: z.string().optional(),

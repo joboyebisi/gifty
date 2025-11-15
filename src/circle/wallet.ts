@@ -41,15 +41,20 @@ export class CircleWalletClient {
     if (!env.CIRCLE_API_KEY) {
       throw new Error("CIRCLE_API_KEY is required");
     }
-    if (!env.CIRCLE_ENTITY_ID) {
+    
+    // CIRCLE_ENTITY_ID is deprecated but still supported for backward compatibility
+    // CIRCLE_ENTITY_SECRET is preferred (used by SDK)
+    if (!env.CIRCLE_ENTITY_ID && !env.CIRCLE_ENTITY_SECRET) {
       throw new Error(
-        "CIRCLE_ENTITY_ID is required. " +
-        "Find it in Circle Console → Settings or API Keys page. " +
-        "See FIND_ENTITY_ID_FINAL.md for detailed instructions."
+        "CIRCLE_ENTITY_ID or CIRCLE_ENTITY_SECRET is required. " +
+        "Note: CIRCLE_ENTITY_SECRET is preferred (used by Circle Wallets SDK). " +
+        "Find it in Circle Console → Settings → Entity Secret. " +
+        "CIRCLE_ENTITY_ID is deprecated but still works with REST API."
       );
     }
+    
     this.apiKey = env.CIRCLE_API_KEY;
-    this.entityId = env.CIRCLE_ENTITY_ID;
+    this.entityId = env.CIRCLE_ENTITY_ID || ""; // May be empty if using SDK
     // Use Circle's sandbox for testing, production uses different URL
     this.baseUrl = process.env.NODE_ENV === "production" 
       ? "https://api.circle.com/v1/w3s" 
@@ -58,6 +63,12 @@ export class CircleWalletClient {
 
   private async request(method: string, endpoint: string, body?: any): Promise<any> {
     const url = `${this.baseUrl}${endpoint}`;
+    
+    console.log(`📡 [CIRCLE/WALLET] ${method} ${endpoint}`);
+    if (body) {
+      console.log(`   Request body:`, JSON.stringify(body, null, 2));
+    }
+    
     const response = await fetch(url, {
       method,
       headers: {
@@ -68,20 +79,50 @@ export class CircleWalletClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Circle API error: ${response.status} ${error}`);
+      const errorText = await response.text();
+      let errorJson;
+      try {
+        errorJson = JSON.parse(errorText);
+      } catch {
+        errorJson = { message: errorText };
+      }
+      
+      console.error(`❌ [CIRCLE/WALLET] API error ${response.status}:`, errorJson);
+      throw new Error(`Circle API error: ${response.status} ${JSON.stringify(errorJson)}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`✅ [CIRCLE/WALLET] Success`);
+    return result;
   }
 
   // Create a developer-controlled wallet
   async createWallet(): Promise<CircleWallet> {
-    const result = await this.request("POST", "/developer/wallets", {
-      idempotencyKey: crypto.randomUUID(),
-      entityId: this.entityId,
-    });
-    return result.data;
+    try {
+      // Circle API requires blockchains array for wallet creation
+      const result = await this.request("POST", "/developer/wallets", {
+        idempotencyKey: crypto.randomUUID(),
+        entityId: this.entityId,
+        blockchains: ["ETH-SEPOLIA", "ETH-ARC-TESTNET"], // Required: specify which blockchains to support
+      });
+      return result.data;
+    } catch (error: any) {
+      // Log detailed error for debugging
+      console.error("❌ [CIRCLE/WALLET] Failed to create developer wallet:");
+      console.error("   Error:", error.message);
+      console.error("   Entity ID:", this.entityId);
+      console.error("   Base URL:", this.baseUrl);
+      
+      // Check if it's a 400 error (bad request) - likely missing required fields or wrong API key type
+      if (error.message?.includes("400")) {
+        throw new Error(
+          "Circle API 400 error: Check CIRCLE_API_KEY and CIRCLE_ENTITY_ID. " +
+          "Note: CIRCLE_CLIENT_KEY (for Smart Accounts) is different from CIRCLE_API_KEY (for developer wallets). " +
+          "Developer wallets may not be needed for escrow - consider using user's Dynamic wallet instead."
+        );
+      }
+      throw error;
+    }
   }
 
   // Get wallet balance
