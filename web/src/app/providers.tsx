@@ -10,15 +10,40 @@ const queryClient = new QueryClient();
 
 // Wagmi config for Arc network (for direct blockchain interactions)
 // Note: arcMainnet currently uses same ID as testnet, so we only configure testnet transport
+// Configure Wagmi to not conflict with Dynamic SDK's ethereum injection
 const wagmiConfig = createConfig({
   chains: [arcTestnet, arcMainnet],
   transports: {
     [arcTestnet.id]: http("https://rpc.testnet.arc.network"), // Official Arc Testnet RPC
     // arcMainnet.id is same as arcTestnet.id currently, so transport is already configured above
   },
+  // Prevent conflicts with Dynamic SDK's ethereum injection
+  ssr: false,
+  syncConnectedChain: false,
 });
 
 export function Providers({ children }: { children: ReactNode }) {
+  useEffect(() => {
+    // Prevent ethereum property redefinition errors
+    // Check if ethereum is already defined and make it configurable
+    if (typeof window !== "undefined" && window.ethereum) {
+      try {
+        // Make the property configurable to prevent redefinition errors
+        const descriptor = Object.getOwnPropertyDescriptor(window, 'ethereum');
+        if (descriptor && !descriptor.configurable) {
+          Object.defineProperty(window, 'ethereum', {
+            ...descriptor,
+            configurable: true,
+            writable: true,
+          });
+        }
+      } catch (e) {
+        // Ignore if we can't modify it
+        console.warn("Could not make ethereum property configurable:", e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     // Load Telegram WebApp SDK if in Telegram
     if (typeof window !== "undefined") {
@@ -47,6 +72,8 @@ export function Providers({ children }: { children: ReactNode }) {
   }, []);
 
   const dynamicEnvironmentId = process.env.NEXT_PUBLIC_DYNAMIC_ENVIRONMENT_ID;
+  const circleClientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
+  const circleClientUrl = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL;
 
   // If Dynamic environment ID is not set, show error message but don't crash
   if (!dynamicEnvironmentId) {
@@ -63,6 +90,11 @@ export function Providers({ children }: { children: ReactNode }) {
         </p>
       </div>
     );
+  }
+
+  // Warn if Circle Client Key is not set (for Circle Smart Accounts)
+  if (!circleClientKey) {
+    console.warn("⚠️ NEXT_PUBLIC_CIRCLE_CLIENT_KEY is not set. Circle Smart Accounts (gasless transactions) will not be available.");
   }
 
   return (

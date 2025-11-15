@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTelegram } from "../hooks/useTelegram";
 import { WalletBalance } from "./WalletBalance";
+import { CircleSmartWallet } from "./CircleSmartWallet";
 
 export function DynamicWallet() {
   const { 
@@ -111,6 +112,7 @@ export function DynamicWallet() {
           </div>
         )}
         <div className="mb-3 pt-2 border-t border-gray-200">
+          <CircleSmartWallet />
           <WalletBalance />
         </div>
         <Link 

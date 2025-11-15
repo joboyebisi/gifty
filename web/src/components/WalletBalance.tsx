@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+import { useTelegram } from "../hooks/useTelegram";
 
 interface BalanceData {
   sepolia?: {
@@ -16,6 +17,7 @@ interface BalanceData {
 
 export function WalletBalance() {
   const { primaryWallet } = useDynamicContext();
+  const { user: tgUser } = useTelegram();
   const [balances, setBalances] = useState<BalanceData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -28,9 +30,26 @@ export function WalletBalance() {
     }
 
     async function fetchBalances() {
+      const walletAddress = primaryWallet?.address;
+      if (!walletAddress) {
+        return;
+      }
+      
       setLoading(true);
       try {
-        const res = await fetch(`${API}/api/wallet/balance?walletAddress=${primaryWallet.address}`);
+        // Build query params with Telegram info if available
+        const queryParams = new URLSearchParams({
+          walletAddress: walletAddress,
+        });
+        
+        if (tgUser?.username) {
+          queryParams.set("telegramHandle", tgUser.username);
+        }
+        if (tgUser?.id) {
+          queryParams.set("telegramUserId", tgUser.id.toString());
+        }
+        
+        const res = await fetch(`${API}/api/wallet/balance?${queryParams.toString()}`);
         const data = await res.json();
         setBalances(data);
       } catch (err) {
@@ -45,7 +64,7 @@ export function WalletBalance() {
     // Refresh every 30 seconds
     const interval = setInterval(fetchBalances, 30000);
     return () => clearInterval(interval);
-  }, [primaryWallet?.address, API]);
+  }, [primaryWallet?.address, API, tgUser?.username, tgUser?.id]);
 
   if (!primaryWallet?.address) {
     return null;
@@ -61,6 +80,14 @@ export function WalletBalance() {
   }
 
   if (balances?.error) {
+    // Don't show "User not found" error - user will be auto-created on next request
+    if (balances.error.includes("User not found")) {
+      return (
+        <div className="text-xs text-gray-500">
+          Setting up account...
+        </div>
+      );
+    }
     return (
       <div className="text-xs text-red-600">
         ⚠️ {balances.error}

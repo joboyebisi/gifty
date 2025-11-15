@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTelegram } from "../../hooks/useTelegram";
 import { WalletBalance } from "../../components/WalletBalance";
+import { CircleSmartWallet } from "../../components/CircleSmartWallet";
 import Link from "next/link";
 
 interface BalanceData {
@@ -84,6 +85,11 @@ export default function WalletPage() {
   return (
     <div className="tg-viewport max-w-md mx-auto px-4 py-8">
       <h2 className="text-2xl font-bold mb-4 text-center">💼 Manage Wallet</h2>
+
+      {/* Circle Smart Account */}
+      <div className="mb-4">
+        <CircleSmartWallet />
+      </div>
 
       {/* Wallet Address */}
       <div className="tg-card p-4 mb-4">

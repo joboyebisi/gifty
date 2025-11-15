@@ -23,12 +23,6 @@ export default function HomePage() {
         <Link href="/compose" className="tg-button-secondary text-center transform hover:scale-105 transition-transform">
           ✍️ Compose
         </Link>
-        <Link href="/team/bulk" className="tg-button-secondary text-center transform hover:scale-105 transition-transform">
-          🏢 Bulk Gifts
-        </Link>
-        <Link href="/programmable" className="tg-button-secondary text-center transform hover:scale-105 transition-transform">
-          ⚡ Programmable
-        </Link>
       </nav>
       
       <div className="tg-card p-6 mb-4">

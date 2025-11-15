@@ -7,9 +7,10 @@ import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 // Component that uses useSearchParams - must be wrapped in Suspense
 export default function GiftsPageClient() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const isConnected = !!primaryWallet && !!dynamicUser;
-  const [action, setAction] = useState<"choose" | "send" | "bulk" | "claim">("choose");
+  const [action, setAction] = useState<"choose" | "send" | "bulk" | "claim" | "programmable">("choose");
 
   // Auto-navigate based on URL parameters from bot
   useEffect(() => {
@@ -33,6 +34,12 @@ export default function GiftsPageClient() {
 
   if (action === "claim") {
     return <ClaimGiftFlow onBack={() => setAction("choose")} />;
+  }
+
+  if (action === "programmable") {
+    // Redirect to programmable page
+    router.push("/programmable");
+    return null;
   }
 
   return (
@@ -63,6 +70,19 @@ export default function GiftsPageClient() {
             className="tg-button-secondary w-full"
           >
             🏢 Bulk Gifts
+          </button>
+        </div>
+
+        <div className="tg-card p-6 text-center">
+          <h3 className="text-lg font-semibold mb-2">⚡ Programmable Gifts</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Create advanced programmable gifts: recurring payments, multi-signature approvals, conditional releases, and more.
+          </p>
+          <button
+            onClick={() => setAction("programmable")}
+            className="tg-button-secondary w-full"
+          >
+            ⚡ Programmable
           </button>
         </div>
 
