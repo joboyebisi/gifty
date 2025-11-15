@@ -164,8 +164,49 @@ export async function handleStartCommand(update: TelegramUpdate): Promise<void> 
     }
   }
 
-  // Regular /start command (no deeplink)
-  await handleBotCommand(update);
+  // Regular /start command (no deeplink) - send welcome message
+  const welcomeMessage = `🎁 <b>Welcome to Gifty!</b>\n\n` +
+    `I help you send delightful stablecoin-powered gifts to your family and friends, home and abroad.\n\n` +
+    `📋 <b>Quick Start:</b>\n` +
+    `• Use /wallet to connect your wallet\n` +
+    `• Use /compose to create a personalized gift\n` +
+    `• Use /help to see all commands\n\n` +
+    `🌐 <b>Open Mini App:</b>\n` +
+    `Click the button below to open the full Gifty experience!`;
+  
+  await bot.sendMessage(
+    chatId,
+    welcomeMessage,
+    {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🚀 Open Gifty Mini App",
+              web_app: { url: `${frontendUrl}` },
+            },
+          ],
+          [
+            {
+              text: "💼 Connect Wallet",
+              web_app: { url: `${frontendUrl}/wallet` },
+            },
+            {
+              text: "🎁 Send Gift",
+              web_app: { url: `${frontendUrl}/gifts` },
+            },
+          ],
+          [
+            {
+              text: "📋 View Birthdays",
+              web_app: { url: `${frontendUrl}/birthdays` },
+            },
+          ],
+        ],
+      },
+    }
+  );
 }
 
 export async function handleBotCommand(update: TelegramUpdate): Promise<void> {
