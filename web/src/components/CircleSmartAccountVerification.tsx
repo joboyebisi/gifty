@@ -16,9 +16,22 @@ export function CircleSmartAccountVerification() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!primaryWallet?.address || !walletClient) {
+    if (!primaryWallet?.address) {
       setStatus("error");
-      setError("Wallet not connected");
+      setError("Dynamic wallet not connected");
+      console.error("❌ Circle Smart Account verification: primaryWallet.address is null");
+      return;
+    }
+
+    if (!walletClient) {
+      setStatus("error");
+      setError("Wallet client not ready. Waiting for wagmi to initialize...");
+      console.error("❌ Circle Smart Account verification: walletClient is null");
+      console.log("Debug info:", { 
+        hasPrimaryWallet: !!primaryWallet, 
+        hasAddress: !!primaryWallet?.address,
+        address: primaryWallet?.address 
+      });
       return;
     }
 
@@ -28,9 +41,16 @@ export function CircleSmartAccountVerification() {
         
         if (!clientKey) {
           setStatus("error");
-          setError("NEXT_PUBLIC_CIRCLE_CLIENT_KEY not configured");
+          setError("NEXT_PUBLIC_CIRCLE_CLIENT_KEY not configured in Vercel environment variables");
+          console.error("❌ Circle Smart Account verification: Client Key missing");
           return;
         }
+
+        console.log("🔍 Verifying Circle Smart Account...", {
+          hasWalletClient: !!walletClient,
+          hasAddress: !!primaryWallet?.address,
+          address: primaryWallet?.address?.slice(0, 10) + "...",
+        });
 
         // Try to create Circle Smart Account
         const smartAccount = await createCircleSmartAccountFromDynamic(walletClient);
@@ -41,8 +61,15 @@ export function CircleSmartAccountVerification() {
         console.log("✅ Circle Smart Account verified:", address);
       } catch (err: any) {
         setStatus("error");
-        setError(err.message || "Failed to create Circle Smart Account");
-        console.error("❌ Circle Smart Account verification failed:", err);
+        const errorMsg = err.message || "Failed to create Circle Smart Account";
+        setError(errorMsg);
+        console.error("❌ Circle Smart Account verification failed:", {
+          error: err.message,
+          stack: err.stack,
+          name: err.name,
+          hasWalletClient: !!walletClient,
+          hasAddress: !!primaryWallet?.address,
+        });
       }
     }
 

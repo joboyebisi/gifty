@@ -131,6 +131,11 @@ export default function BirthdaysPage() {
         }
       }
       
+      // Include Dynamic user email if available (for auto-verification)
+      if (dynamicUser?.email) {
+        queryParams.set("email", dynamicUser.email);
+      }
+      
       fetch(`${API}/api/users/me?${queryParams.toString()}`)
         .then((res) => {
           if (!res.ok) {

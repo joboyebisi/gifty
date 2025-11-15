@@ -59,6 +59,7 @@ export default function AddBirthdayPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          walletAddress: primaryWallet?.address, // Link birthday to user's wallet
           telegramHandle: formData.telegramHandle.replace("@", "") || undefined,
           email: formData.email || undefined,
           phoneNumber: formData.phoneNumber || undefined,

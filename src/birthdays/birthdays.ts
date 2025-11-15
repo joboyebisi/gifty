@@ -13,7 +13,12 @@ export interface Birthday {
   createdAt: string;
 }
 
-export async function getUpcomingBirthdays(days: number = 7): Promise<Birthday[]> {
+export async function getUpcomingBirthdays(
+  days: number = 7,
+  userId?: string,
+  walletAddress?: string,
+  telegramHandle?: string
+): Promise<Birthday[]> {
   const sb = getSupabase();
   if (!sb) return [];
 
@@ -22,10 +27,32 @@ export async function getUpcomingBirthdays(days: number = 7): Promise<Birthday[]
   const currentMonth = today.getMonth() + 1; // 1-12
   const currentDay = today.getDate();
 
-  // Get all birthdays (we'll filter by date range)
-  const { data, error } = await sb
-    .from("birthdays")
-    .select("*")
+  // Build query - filter by user if provided
+  let query = sb.from("birthdays").select("*");
+  
+  // Filter by user identifier
+  if (userId) {
+    query = query.eq("user_id", userId);
+  } else if (walletAddress) {
+    // Get user by wallet address first, then filter birthdays
+    const { getUserByWallet } = await import("../users/users");
+    const user = await getUserByWallet(walletAddress);
+    if (user?.telegramUserId) {
+      query = query.eq("user_id", user.telegramUserId);
+    } else if (user?.telegramHandle) {
+      query = query.eq("telegram_handle", user.telegramHandle);
+    } else {
+      // No user found - return empty (user hasn't created account yet)
+      return [];
+    }
+  } else if (telegramHandle) {
+    query = query.eq("telegram_handle", telegramHandle.replace("@", ""));
+  }
+  
+  // Also include birthdays where user is the recipient (for contacts)
+  // For now, we'll show all birthdays linked to the user
+  
+  const { data, error } = await query
     .order("month", { ascending: true })
     .order("day", { ascending: true })
     .limit(200); // Get more to handle year boundaries
