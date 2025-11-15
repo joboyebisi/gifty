@@ -14,8 +14,36 @@ import { EscrowManager } from "./circle/escrow";
 import { CircleOnrampClient } from "./circle/onramp";
 import { CircleOfframpClient } from "./circle/offramp";
 
+// Load environment variables
+const env = loadEnv();
+
 const app = express();
-app.use(cors());
+
+// CORS configuration - allow frontend URL in production
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    const allowedOrigins = [
+      env.FRONTEND_URL,
+      "http://localhost:3000",
+      "https://localhost:3000",
+    ].filter(Boolean);
+    
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // In development, allow all origins
+      if (env.NODE_ENV === "development") {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    }
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Root route
@@ -1039,52 +1067,57 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
     const env = await import("./config/env").then(m => m.loadEnv());
     const webhookSecret = env.GOODY_WEBHOOK_SECRET;
     
+    // Get Svix headers for signature verification
+    const svixHeaders = {
+      "svix-id": req.headers["svix-id"] as string,
+      "svix-timestamp": req.headers["svix-timestamp"] as string,
+      "svix-signature": req.headers["svix-signature"] as string,
+    };
+
     // Verify webhook signature if secret is provided
     if (webhookSecret) {
       try {
-        // Goody uses Svix for webhooks, so we need to verify the signature
-        const svixId = req.headers["svix-id"] as string;
-        const svixTimestamp = req.headers["svix-timestamp"] as string;
-        const svixSignature = req.headers["svix-signature"] as string;
+        const { verifySvixSignature } = await import("./goody/webhook");
+        const payload = JSON.stringify(req.body);
         
-        if (!svixId || !svixTimestamp || !svixSignature) {
-          console.warn("⚠️ Missing Svix headers, skipping signature verification");
-        } else {
-          // For now, we'll log that we received the signature
-          // Full signature verification requires @svix/server package
-          console.log("🔐 Webhook signature received (verification recommended)");
+        const isValid = verifySvixSignature(payload, svixHeaders, webhookSecret);
+        
+        if (!isValid) {
+          console.warn("⚠️ Invalid webhook signature - rejecting");
+          return res.status(401).json({ error: "Invalid signature" });
         }
+        
+        console.log("🔐 Webhook signature verified");
       } catch (sigError: any) {
-        console.warn("⚠️ Signature verification skipped:", sigError.message);
-        // Continue processing even if signature verification fails
+        console.warn("⚠️ Signature verification error:", sigError.message);
         // In production, you might want to reject invalid signatures
+        // For now, we'll continue but log the warning
       }
+    } else {
+      console.warn("⚠️ GOODY_WEBHOOK_SECRET not set - skipping signature verification");
     }
     
     const event = req.body;
     console.log("🎁 Goody webhook received:", JSON.stringify(event, null, 2));
     
-    // Handle different event types
-    if (event.type === "order.created") {
-      console.log("✅ Order created:", event.data.id);
-    } else if (event.type === "order.gift_opened") {
-      console.log("📬 Gift opened:", event.data.id);
-    } else if (event.type === "order.gift_accepted") {
-      console.log("✅ Gift accepted:", event.data.id);
-    } else if (event.type === "order.shipped") {
-      console.log("📦 Gift shipped:", event.data.id);
-    } else if (event.type === "order.delivered") {
-      console.log("🎉 Gift delivered:", event.data.id);
-    } else if (event.type === "order.canceled") {
-      console.log("❌ Order canceled:", event.data.id);
-    } else if (event.type === "order.refunded") {
-      console.log("💰 Order refunded:", event.data.id);
+    // Handle webhook event using dedicated handler
+    try {
+      const { handleGoodyWebhook } = await import("./goody/webhook");
+      await handleGoodyWebhook(event);
+    } catch (handlerError: any) {
+      console.error("❌ Error handling webhook:", handlerError);
+      // Still return success to Goody to prevent retries
+      // Log error for investigation
     }
     
-    res.json({ received: true });
+    // Always return success to Goody (200 OK)
+    // This prevents Goody from retrying the webhook
+    res.json({ received: true, processed: true });
   } catch (err: any) {
     console.error("❌ Goody webhook error:", err);
-    res.status(500).json({ error: err?.message || "failed" });
+    // Return 200 to prevent Goody from retrying
+    // Log error for investigation
+    res.status(200).json({ received: true, error: err?.message || "processing failed" });
   }
 });
 
@@ -1650,11 +1683,19 @@ app.post("/api/ai/analyze-group-messages", async (req: any, res: any) => {
   }
 });
 
-const env = loadEnv();
+// Smart Contract API endpoints
+import smartContractRoutes from "./server-smart-contracts";
+app.use("/api/smart-contracts", smartContractRoutes);
+
+// Health check endpoint for Railway/Docker
+app.get("/health", (req: any, res: any) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 app.listen(PORT, () => {
   // eslint-disable-next-line no-console
-  console.log(`Gifty API listening on http://localhost:${PORT} (provider=${env.DEFAULT_LLM_PROVIDER})`);
+  console.log(`Gifty API listening on http://localhost:${PORT} (provider=${env.DEFAULT_LLM_PROVIDER || "gemini"})`);
 });
 
 

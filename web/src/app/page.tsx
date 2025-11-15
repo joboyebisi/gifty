@@ -26,6 +26,9 @@ export default function HomePage() {
         <Link href="/team/bulk" className="tg-button-secondary text-center transform hover:scale-105 transition-transform">
           🏢 Bulk Gifts
         </Link>
+        <Link href="/programmable" className="tg-button-secondary text-center transform hover:scale-105 transition-transform">
+          ⚡ Programmable
+        </Link>
       </nav>
       
       <div className="tg-card p-6 mb-4">

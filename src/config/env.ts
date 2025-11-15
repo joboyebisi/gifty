@@ -45,6 +45,15 @@ const schema = z.object({
   // 1inch API (optional, for DEX aggregator)
   ONEINCH_API_KEY: z.string().optional(),
   NEXT_PUBLIC_ONEINCH_API_KEY: z.string().optional(),
+  // Smart Contract Addresses (set after deployment)
+  GIFT_ESCROW_ADDRESS: z.string().optional(),
+  BULK_GIFT_ADDRESS: z.string().optional(),
+  GROUP_GIFT_ESCROW_ADDRESS: z.string().optional(),
+  CONDITIONAL_RELEASE_ADDRESS: z.string().optional(),
+  RECURRING_GIFT_ADDRESS: z.string().optional(),
+  MULTISIG_GIFT_ADDRESS: z.string().optional(),
+  // Deployment wallet (for contract deployment)
+  DEPLOYER_PRIVATE_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof schema>;

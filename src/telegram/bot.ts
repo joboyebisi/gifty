@@ -65,7 +65,7 @@ export class TelegramBot {
   }
 
   // Send message to user
-  async sendMessage(chatId: number, text: string, options?: { reply_markup?: any; parse_mode?: string }): Promise<any> {
+  async sendMessage(chatId: number, text: string, options?: { reply_markup?: any; parse_mode?: string; reply_to_message_id?: number }): Promise<any> {
     return this.request("sendMessage", {
       chat_id: chatId,
       text,

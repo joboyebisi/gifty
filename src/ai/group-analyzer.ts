@@ -235,10 +235,10 @@ async function generatePersonalizedMessage(profile: PersonalityProfile): Promise
       {
         senderName: "Your Team",
         recipientHandle: profile.username || profile.userId.toString(),
-        relationship: "colleague",
+        relationship: "coworker",
       },
       {
-        tone: "appreciative",
+        tone: "heartfelt",
         maxChars: 200,
         variants: 1,
         locale: "en",

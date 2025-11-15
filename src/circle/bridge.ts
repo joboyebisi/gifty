@@ -57,8 +57,8 @@ export class CircleBridge {
 
       // Execute bridge
       const result = await this.kit.bridge({
-        from: { adapter, chain: fromChain },
-        to: { adapter, chain: toChain },
+        from: { adapter, chain: fromChain as any },
+        to: { adapter, chain: toChain as any },
         amount,
       });
 

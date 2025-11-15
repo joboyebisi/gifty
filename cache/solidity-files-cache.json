@@ -1,0 +1,221 @@
+{
+  "_format": "hh-sol-cache-2",
+  "files": {
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\BulkGift.sol": {
+      "lastModificationDate": 1763157519002,
+      "contentHash": "b1969bf1f0830c757088f01080bf4b39",
+      "sourceName": "contracts/BulkGift.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "BulkGift"
+      ]
+    },
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\ConditionalRelease.sol": {
+      "lastModificationDate": 1763157538987,
+      "contentHash": "bc5b7bca7944217a8f34133efa74161b",
+      "sourceName": "contracts/ConditionalRelease.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "ConditionalRelease"
+      ]
+    },
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\GiftEscrow.sol": {
+      "lastModificationDate": 1763157339325,
+      "contentHash": "6f5fca612fcb9809d1042dba4e063cc9",
+      "sourceName": "contracts/GiftEscrow.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "GiftEscrow"
+      ]
+    },
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\GroupGiftEscrow.sol": {
+      "lastModificationDate": 1763157353793,
+      "contentHash": "7706159d69dfcc112f7a80582844f604",
+      "sourceName": "contracts/GroupGiftEscrow.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "GroupGiftEscrow"
+      ]
+    },
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\MultiSigGift.sol": {
+      "lastModificationDate": 1763157647408,
+      "contentHash": "c4765b612b0e6e854e355fe1a5a43907",
+      "sourceName": "contracts/MultiSigGift.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "MultiSigGift"
+      ]
+    },
+    "C:\\Users\\Deborah\\Documents\\Cursor Projects\\gifty\\contracts\\RecurringGift.sol": {
+      "lastModificationDate": 1763157636344,
+      "contentHash": "dd92464e91934c29a8458de08ff16fa2",
+      "sourceName": "contracts/RecurringGift.sol",
+      "solcConfig": {
+        "version": "0.8.24",
+        "settings": {
+          "optimizer": {
+            "enabled": true,
+            "runs": 200
+          },
+          "evmVersion": "paris",
+          "outputSelection": {
+            "*": {
+              "*": [
+                "abi",
+                "evm.bytecode",
+                "evm.deployedBytecode",
+                "evm.methodIdentifiers",
+                "metadata"
+              ],
+              "": [
+                "ast"
+              ]
+            }
+          }
+        }
+      },
+      "imports": [],
+      "versionPragmas": [
+        "^0.8.24"
+      ],
+      "artifacts": [
+        "RecurringGift"
+      ]
+    }
+  }
+}
