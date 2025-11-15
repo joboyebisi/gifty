@@ -78,6 +78,9 @@ export class EscrowManager {
    * Verify escrow wallet has sufficient funds
    */
   async verifyEscrowBalance(walletId: string, requiredAmount: string): Promise<boolean> {
+    if (!this.circleWallet) {
+      throw new Error("Circle wallet client not initialized");
+    }
     const balance = await this.circleWallet.getWalletBalance(walletId);
     const balanceNum = parseFloat(balance);
     const requiredNum = parseFloat(requiredAmount);
@@ -130,6 +133,10 @@ export class EscrowManager {
     sourceChain: string,
     destinationChain: string
   ): Promise<{ transferId: string; status: string; messageHash?: string }> {
+    if (!this.circleWallet) {
+      throw new Error("Circle wallet client not initialized");
+    }
+    
     const { CCTPClient } = await import("./cctp");
     const cctp = new CCTPClient();
 

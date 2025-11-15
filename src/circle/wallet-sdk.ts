@@ -76,9 +76,13 @@ export class CircleWalletSDKClient {
       const walletSets = await this.walletSDK.listWalletSets();
       
       if (walletSets?.data?.walletSets && walletSets.data.walletSets.length > 0) {
-        this.walletSetId = walletSets.data.walletSets[0].id;
-        console.log(`✅ [CIRCLE/SDK] Using existing wallet set: ${this.walletSetId}`);
-        return this.walletSetId;
+        const walletSetId = walletSets.data.walletSets[0].id;
+        if (!walletSetId) {
+          throw new Error("Wallet set ID is null");
+        }
+        this.walletSetId = walletSetId;
+        console.log(`✅ [CIRCLE/SDK] Using existing wallet set: ${walletSetId}`);
+        return walletSetId;
       }
 
       // Create new wallet set if none exists
@@ -87,10 +91,11 @@ export class CircleWalletSDKClient {
         name,
       });
 
-      if (walletSetResponse?.data?.walletSet?.id) {
-        this.walletSetId = walletSetResponse.data.walletSet.id;
-        console.log(`✅ [CIRCLE/SDK] Wallet set created: ${this.walletSetId}`);
-        return this.walletSetId;
+      const walletSetId = walletSetResponse?.data?.walletSet?.id;
+      if (walletSetId) {
+        this.walletSetId = walletSetId;
+        console.log(`✅ [CIRCLE/SDK] Wallet set created: ${walletSetId}`);
+        return walletSetId;
       }
 
       throw new Error("Failed to create wallet set: No ID returned");
@@ -205,7 +210,10 @@ export class CircleWalletSDKClient {
         throw new Error(`Transfer failed: ${response.status} ${error}`);
       }
 
-      const result = await response.json();
+      const result = await response.json() as { data: { id: string; status: string } };
+      if (!result.data || !result.data.id || !result.data.status) {
+        throw new Error("Invalid response from Circle API");
+      }
       return {
         id: result.data.id,
         status: result.data.status,
