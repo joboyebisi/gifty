@@ -755,15 +755,25 @@ app.post("/api/users", async (req: any, res: any) => {
 // Get wallet balance
 app.get("/api/wallet/balance", async (req: any, res: any) => {
   try {
-    const { telegramUserId, walletAddress, chainId } = req.query;
+    const { telegramUserId, walletAddress, chainId, telegramHandle } = req.query;
     if (!telegramUserId && !walletAddress) {
       return res.status(400).json({ error: "telegramUserId or walletAddress required" });
     }
 
-    const { getUserByTelegramId, getUserByWallet } = await import("./users/users");
-    const user = telegramUserId 
+    const { getUserByTelegramId, getUserByWallet, createOrUpdateUser } = await import("./users/users");
+    let user = telegramUserId 
       ? await getUserByTelegramId(telegramUserId as string)
       : await getUserByWallet(walletAddress as string);
+    
+    // Auto-create user if doesn't exist (similar to /api/users/me)
+    if (!user && walletAddress) {
+      console.log(`📝 Auto-creating account for wallet balance check: ${walletAddress.slice(0, 6)}...`);
+      user = await createOrUpdateUser({
+        walletAddress: walletAddress as string,
+        telegramHandle: telegramHandle as string | undefined,
+        telegramUserId: telegramUserId as string | undefined,
+      });
+    }
     
     if (!user) {
       return res.status(404).json({ error: "User not found" });
