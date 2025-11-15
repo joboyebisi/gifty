@@ -63,9 +63,12 @@ export function DualWalletDisplay() {
     }
 
     async function fetchDynamicBalances() {
+      const walletAddress = primaryWallet?.address;
+      if (!walletAddress) return;
+      
       setLoading(true);
       try {
-        const res = await fetch(`${API}/api/wallet/balance?walletAddress=${primaryWallet.address}`);
+        const res = await fetch(`${API}/api/wallet/balance?walletAddress=${walletAddress}`);
         const data = await res.json();
         setDynamicBalances(data);
       } catch (err) {
