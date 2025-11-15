@@ -84,15 +84,17 @@ export interface SwapResult {
 
 // Mock DEX router address - replace with actual Arc DEX router
 // This would be a DEX like Uniswap, SushiSwap, or Arc-native DEX
+// Note: arcMainnet uses same ID as testnet until mainnet is available
 const DEFAULT_DEX_ROUTER: Record<number, Address> = {
-  [arcTestnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual testnet router
-  [arcMainnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual mainnet router
+  [arcTestnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual router
+  // arcMainnet.id is same as testnet until mainnet launches, so only one entry needed
 };
 
 // USDC address on Arc (native token, but still represented as ERC20)
+// Note: arcMainnet uses same ID as testnet until mainnet is available
 const USDC_ADDRESS: Record<number, Address> = {
-  [arcTestnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual testnet USDC
-  [arcMainnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual mainnet USDC
+  [arcTestnet.id]: "0x0000000000000000000000000000000000000000" as Address, // Replace with actual USDC address
+  // arcMainnet.id is same as testnet until mainnet launches, so only one entry needed
 };
 
 // 1inch Aggregator API (for quote and swap execution)
