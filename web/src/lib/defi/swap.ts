@@ -179,9 +179,10 @@ export class SwapService {
     const chainId = params.sourceChain || this.chainId;
     
     // Map chain IDs to 1inch format
+    // Note: arcMainnet uses same ID as testnet until mainnet is available
     const oneInchChainMap: Record<number, number> = {
       [arcTestnet.id]: 1, // Use Ethereum mainnet as fallback
-      [arcMainnet.id]: 1, // Use Ethereum mainnet as fallback
+      // arcMainnet.id is same as testnet until mainnet launches
     };
 
     const oneInchChain = oneInchChainMap[chainId] || 1;
@@ -294,9 +295,10 @@ export class SwapService {
     }
 
     // Step 2: Transfer USDC via CCTP to destination chain (Arc)
+    // Note: arcMainnet uses same ID as testnet until mainnet is available
     const chainNameMap: Record<number, string> = {
-      [arcTestnet.id]: "arc-testnet",
-      [arcMainnet.id]: "arc",
+      [arcTestnet.id]: "arc-testnet", // Use testnet for now
+      // arcMainnet.id is same as testnet until mainnet launches
     };
 
     const fromChain = chainNameMap[sourceChainId] || "ethereum";
