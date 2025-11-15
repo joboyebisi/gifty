@@ -66,69 +66,114 @@ app.get("/healthz", (_req: any, res: any) => {
 app.post("/api/ai/persona", async (req: any, res: any) => {
   try {
     const { snippets, stats, locale, provider, recipientHandle } = (req as any).body || {};
+    
+    console.log(`\n🤖 [PERSONA] Request received:`);
+    console.log(`   Provider: ${provider || "default"}`);
+    console.log(`   Snippets count: ${snippets?.length || 0}`);
+    console.log(`   Recipient: ${recipientHandle || "N/A"}`);
+    
     if (!Array.isArray(snippets) || snippets.length === 0) {
+      console.error("❌ [PERSONA] Validation failed: snippets required");
       return res.status(400).json({ error: "snippets required" });
     }
     
-    console.log(`🤖 Generating persona with provider: ${provider || "default"}`);
+    // Check environment variables
+    const env = loadEnv();
+    const hasGemini = !!env.GEMINI_API_KEY;
+    const hasGroq = !!env.GROQ_API_KEY;
+    console.log(`   Environment check: GEMINI_API_KEY=${hasGemini ? "✅" : "❌"}, GROQ_API_KEY=${hasGroq ? "✅" : "❌"}`);
+    
+    console.log(`🤖 [PERSONA] Generating persona with provider: ${provider || "default"}`);
     const persona = await generatePersona({ snippets, stats: stats || {}, locale }, { provider });
     
     if (!persona || !persona.trim()) {
-      console.error("⚠️ Persona generation returned empty result");
-      return res.status(500).json({ error: "Persona generation returned empty result. Please check API keys." });
+      console.error("❌ [PERSONA] Persona generation returned empty result");
+      console.error("   Check AI API keys in Railway environment variables");
+      return res.status(500).json({ 
+        error: "Persona generation returned empty result. Please check API keys.",
+        details: `Missing: ${!hasGemini && !hasGroq ? "GEMINI_API_KEY or GROQ_API_KEY" : !hasGemini ? "GEMINI_API_KEY" : "GROQ_API_KEY"}`
+      });
     }
+    
+    console.log(`✅ [PERSONA] Generated persona (${persona.length} chars)`);
     
     if (recipientHandle) {
       try {
         await savePersonaSnapshot(recipientHandle, persona, provider || "auto");
       } catch (saveErr) {
-        console.warn("Failed to save persona snapshot:", saveErr);
+        console.warn("⚠️ [PERSONA] Failed to save persona snapshot:", saveErr);
         // Don't fail the request if saving fails
       }
     }
     
     res.json({ persona });
   } catch (err: any) {
-    console.error("❌ Error generating persona:", err);
+    console.error("❌ [PERSONA] Error generating persona:", err);
+    console.error("   Error name:", err?.name);
+    console.error("   Error message:", err?.message);
+    console.error("   Error stack:", err?.stack?.slice(0, 500));
+    
     const errorMessage = err?.message || "failed";
     
     // Provide helpful error messages
     if (errorMessage.includes("API_KEY") || errorMessage.includes("missing")) {
       return res.status(500).json({ 
-        error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in environment variables.` 
+        error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in Railway environment variables.`,
+        details: err.message
       });
     }
     
-    res.status(500).json({ error: errorMessage });
+    res.status(500).json({ 
+      error: errorMessage,
+      details: err?.stack?.slice(0, 200) || "No additional details"
+    });
   }
 });
 
 app.post("/api/ai/messages", async (req: any, res: any) => {
   try {
     const { persona, relationship, constraints, provider, giftId, recipientHandle } = (req as any).body || {};
+    
+    console.log(`\n🤖 [MESSAGES] Request received:`);
+    console.log(`   Provider: ${provider || "default"}`);
+    console.log(`   Persona length: ${persona?.length || 0}`);
+    console.log(`   Gift ID: ${giftId || "N/A"}`);
+    console.log(`   Recipient: ${recipientHandle || "N/A"}`);
+    
     if (typeof persona !== "string" || !persona.trim()) {
+      console.error("❌ [MESSAGES] Validation failed: persona required");
       return res.status(400).json({ error: "persona required" });
     }
+    
+    // Check environment variables
+    const env = loadEnv();
+    const hasGemini = !!env.GEMINI_API_KEY;
+    const hasGroq = !!env.GROQ_API_KEY;
+    console.log(`   Environment check: GEMINI_API_KEY=${hasGemini ? "✅" : "❌"}, GROQ_API_KEY=${hasGroq ? "✅" : "❌"}`);
     
     const rel = relationship || {};
     const cons = constraints || {};
     
-    console.log(`🤖 Generating messages with provider: ${provider || "default"}`);
+    console.log(`🤖 [MESSAGES] Generating messages with provider: ${provider || "default"}`);
     const out = await generateBirthdayMessages(persona, rel, cons, { provider });
     
     if (!out.messages || out.messages.length === 0) {
-      console.error("⚠️ Message generation returned no messages");
+      console.error("❌ [MESSAGES] Message generation returned no messages");
+      console.error("   Check AI API keys in Railway environment variables");
       return res.status(500).json({ 
-        error: "Message generation returned no messages. Please check API keys and try again." 
+        error: "Message generation returned no messages. Please check API keys and try again.",
+        details: `Missing: ${!hasGemini && !hasGroq ? "GEMINI_API_KEY or GROQ_API_KEY" : !hasGemini ? "GEMINI_API_KEY" : "GROQ_API_KEY"}`
       });
     }
+    
+    console.log(`✅ [MESSAGES] Generated ${out.messages.length} messages`);
     
     // Save messages if giftId provided
     if (giftId) {
       try {
         await saveGeneratedMessages(giftId, out.messages, provider || "auto");
       } catch (saveErr) {
-        console.warn("Failed to save generated messages:", saveErr);
+        console.warn("⚠️ [MESSAGES] Failed to save generated messages:", saveErr);
         // Don't fail the request if saving fails
       }
     }
@@ -138,24 +183,32 @@ app.post("/api/ai/messages", async (req: any, res: any) => {
       try {
         await savePersonaSnapshot(recipientHandle, out.personaSummary || persona, provider || "auto");
       } catch (saveErr) {
-        console.warn("Failed to save persona snapshot:", saveErr);
+        console.warn("⚠️ [MESSAGES] Failed to save persona snapshot:", saveErr);
         // Don't fail the request if saving fails
       }
     }
     
     res.json(out);
   } catch (err: any) {
-    console.error("❌ Error generating messages:", err);
+    console.error("❌ [MESSAGES] Error generating messages:", err);
+    console.error("   Error name:", err?.name);
+    console.error("   Error message:", err?.message);
+    console.error("   Error stack:", err?.stack?.slice(0, 500));
+    
     const errorMessage = err?.message || "failed";
     
     // Provide helpful error messages
     if (errorMessage.includes("API_KEY") || errorMessage.includes("missing")) {
       return res.status(500).json({ 
-        error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in environment variables.` 
+        error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in Railway environment variables.`,
+        details: err.message
       });
     }
     
-    res.status(500).json({ error: errorMessage });
+    res.status(500).json({ 
+      error: errorMessage,
+      details: err?.stack?.slice(0, 200) || "No additional details"
+    });
   }
 });
 
@@ -274,7 +327,14 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
       });
     }
   } catch (err: any) {
-    res.status(500).json({ error: err?.message || "failed" });
+    console.error("❌ [GIFTS/CREATE] Top-level error:", err);
+    console.error("   Error name:", err?.name);
+    console.error("   Error message:", err?.message);
+    console.error("   Error stack:", err?.stack?.slice(0, 500));
+    res.status(500).json({ 
+      error: err?.message || "failed",
+      details: err?.stack?.slice(0, 200) || "No additional details"
+    });
   }
 });
 
