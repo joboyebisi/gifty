@@ -624,16 +624,55 @@ app.get("/api/birthdays", async (req: any, res: any) => {
 // Create birthday
 app.post("/api/birthdays", async (req: any, res: any) => {
   try {
-    const { userId, telegramHandle, email, name, month, day, year, visibility, relationship } = (req as any).body || {};
+    const { userId, telegramHandle, email, phoneNumber, name, month, day, year, visibility, relationship } = (req as any).body || {};
     if (!month || !day || month < 1 || month > 12 || day < 1 || day > 31) {
       return res.status(400).json({ error: "Valid month (1-12) and day (1-31) required" });
     }
-    if (!telegramHandle && !email && !name) {
-      return res.status(400).json({ error: "telegramHandle, email, or name required" });
+    if (!telegramHandle && !email && !name && !phoneNumber) {
+      return res.status(400).json({ error: "telegramHandle, email, name, or phoneNumber required" });
     }
     
-    const birthday = await createBirthday({ userId, telegramHandle, email, month, day, year, visibility });
-    res.json({ birthday });
+    // Update birthday creation to include phoneNumber
+    const sb = getSupabase();
+    if (!sb) {
+      return res.status(500).json({ error: "Database not configured" });
+    }
+
+    const { data: birthday, error } = await sb
+      .from("birthdays")
+      .insert({
+        user_id: userId,
+        telegram_handle: telegramHandle,
+        email: email,
+        phone_number: phoneNumber,
+        month: month,
+        day: day,
+        year: year,
+        visibility: visibility || "public",
+        source: "user",
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: `Failed to create birthday: ${error.message}` });
+    }
+
+    res.json({
+      birthday: {
+        id: birthday.id,
+        userId: birthday.user_id,
+        telegramHandle: birthday.telegram_handle,
+        email: birthday.email,
+        phoneNumber: birthday.phone_number,
+        month: birthday.month,
+        day: birthday.day,
+        year: birthday.year,
+        visibility: birthday.visibility,
+        source: birthday.source,
+        createdAt: birthday.created_at,
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
   }

@@ -4,6 +4,49 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 
+// Native share utility
+async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: string, recipientEmail?: string, recipientPhone?: string) {
+  const shareText = `🎁 You've received a gift!\n\nClaim it here: ${claimUrl}\n\nOr use claim code: ${claimCode}`;
+  
+  // Try native Web Share API first
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: "You've received a gift!",
+        text: shareText,
+        url: claimUrl,
+      });
+      return true;
+    } catch (err) {
+      // User cancelled or error - fall through to manual options
+    }
+  }
+  
+  // Fallback: Show share options
+  const shareOptions: string[] = [];
+  
+  if (recipientHandle) {
+    shareOptions.push(`Telegram: https://t.me/share/url?url=${encodeURIComponent(claimUrl)}&text=${encodeURIComponent(shareText)}`);
+  }
+  if (recipientEmail) {
+    shareOptions.push(`Email: mailto:${recipientEmail}?subject=You've received a gift!&body=${encodeURIComponent(shareText)}`);
+  }
+  if (recipientPhone) {
+    shareOptions.push(`SMS: sms:${recipientPhone}?body=${encodeURIComponent(shareText)}`);
+    shareOptions.push(`WhatsApp: https://wa.me/${recipientPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(shareText)}`);
+  }
+  
+  // Copy to clipboard as fallback
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(claimUrl);
+    alert(`✅ Gift link copied to clipboard!\n\n${shareOptions.length > 0 ? `Or share via:\n${shareOptions.join("\n")}` : ""}`);
+  } else {
+    prompt("Copy this gift link:", claimUrl);
+  }
+  
+  return false;
+}
+
 // Component that uses useSearchParams - must be wrapped in Suspense
 export default function GiftsPageClient() {
   const searchParams = useSearchParams();
@@ -108,12 +151,14 @@ export default function GiftsPageClient() {
 // Send Gift Flow Component
 function SendGiftFlow({ onBack }: { onBack: () => void }) {
   const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  const searchParams = useSearchParams();
   const address = primaryWallet?.address;
   const isConnected = !!primaryWallet && !!dynamicUser;
   const [step, setStep] = useState<"recipient" | "amount" | "message" | "chains" | "review">("recipient");
   const [formData, setFormData] = useState({
     recipientHandle: "",
     recipientEmail: "",
+    recipientPhone: "",
     amount: "10.00",
     message: "",
     srcChain: "ethereum",
@@ -124,8 +169,30 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
   const [persona, setPersona] = useState("");
   const [messages, setMessages] = useState<string[]>([]);
   const [selectedMessage, setSelectedMessage] = useState("");
+  const [giftCreated, setGiftCreated] = useState(false);
+  const [claimUrl, setClaimUrl] = useState("");
+  const [claimCode, setClaimCode] = useState("");
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+  // Prefill from URL params (from birthday page or other sources)
+  useEffect(() => {
+    const recipients = searchParams.get("recipients");
+    const name = searchParams.get("name");
+    const phoneNumber = searchParams.get("phoneNumber");
+    
+    if (recipients) {
+      // Check if it's an email or telegram handle
+      if (recipients.includes("@") && !recipients.startsWith("@")) {
+        setFormData(prev => ({ ...prev, recipientEmail: recipients }));
+      } else {
+        setFormData(prev => ({ ...prev, recipientHandle: recipients.replace("@", "") }));
+      }
+    }
+    if (phoneNumber) {
+      setFormData(prev => ({ ...prev, recipientPhone: phoneNumber }));
+    }
+  }, [searchParams]);
 
   async function generatePersona() {
     if (!formData.snippets.trim()) return;
@@ -211,8 +278,17 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
       });
       const data = await res.json();
       if (res.ok && data.claimUrl) {
-        alert(`🎉 Gift created and escrowed!\n\nShare this link: ${data.claimUrl}\n\nFunds are locked in escrow and ready to claim.`);
-        onBack();
+        setClaimUrl(data.claimUrl);
+        setClaimCode(data.claimCode || "");
+        setGiftCreated(true);
+        // Auto-trigger share
+        await shareGift(
+          data.claimUrl,
+          data.claimCode || "",
+          formData.recipientHandle,
+          formData.recipientEmail,
+          formData.recipientPhone
+        );
       } else {
         alert(data.error || "Failed to create gift");
       }
@@ -221,6 +297,49 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Show success state after gift creation
+  if (giftCreated && claimUrl) {
+    return (
+      <div className="tg-viewport max-w-md mx-auto px-4 py-4">
+        <div className="tg-card p-6 text-center mb-4">
+          <div className="text-4xl mb-4">🎉</div>
+          <h2 className="text-xl font-bold mb-2">Gift Created!</h2>
+          <p className="text-sm text-gray-700 mb-4">
+            Your gift is ready to share. The recipient can claim it using the link below.
+          </p>
+          <div className="bg-gray-50 p-3 rounded-lg mb-4">
+            <div className="text-xs text-gray-600 mb-1">Claim Code:</div>
+            <div className="font-mono text-sm font-semibold">{claimCode}</div>
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg mb-4">
+            <div className="text-xs text-blue-600 mb-1">Share Link:</div>
+            <div className="font-mono text-xs break-all">{claimUrl}</div>
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={() => shareGift(claimUrl, claimCode, formData.recipientHandle, formData.recipientEmail, formData.recipientPhone)}
+              className="tg-button-primary w-full"
+            >
+              📤 Share Gift Again
+            </button>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(claimUrl);
+                alert("✅ Link copied to clipboard!");
+              }}
+              className="tg-button-secondary w-full"
+            >
+              📋 Copy Link
+            </button>
+            <button onClick={onBack} className="tg-button-secondary w-full">
+              ← Back to Gifts
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -253,6 +372,18 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
               value={formData.recipientEmail}
               onChange={(e) => setFormData({ ...formData, recipientEmail: e.target.value })}
               placeholder="friend@example.com"
+              className="w-full p-3 border border-gray-300 rounded-lg text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Recipient Phone Number (optional)
+            </label>
+            <input
+              type="tel"
+              value={formData.recipientPhone}
+              onChange={(e) => setFormData({ ...formData, recipientPhone: e.target.value })}
+              placeholder="+1234567890"
               className="w-full p-3 border border-gray-300 rounded-lg text-sm"
             />
           </div>

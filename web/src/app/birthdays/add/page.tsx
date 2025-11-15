@@ -29,6 +29,7 @@ export default function AddBirthdayPage() {
     name: "",
     telegramHandle: "",
     email: "",
+    phoneNumber: "",
     month: new Date().getMonth() + 1,
     day: new Date().getDate(),
     year: undefined as number | undefined,
@@ -38,8 +39,8 @@ export default function AddBirthdayPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    if (!formData.name && !formData.telegramHandle && !formData.email) {
-      setError("Please enter a name, Telegram handle, or email");
+    if (!formData.name && !formData.telegramHandle && !formData.email && !formData.phoneNumber) {
+      setError("Please enter a name, Telegram handle, email, or phone number");
       return;
     }
 
@@ -58,6 +59,7 @@ export default function AddBirthdayPage() {
         body: JSON.stringify({
           telegramHandle: formData.telegramHandle.replace("@", "") || undefined,
           email: formData.email || undefined,
+          phoneNumber: formData.phoneNumber || undefined,
           month: formData.month,
           day: formData.day,
           year: formData.year || undefined,
@@ -122,8 +124,11 @@ export default function AddBirthdayPage() {
             onClick={() => {
               const params = new URLSearchParams();
               if (recipientHandle) params.set("recipients", recipientHandle);
+              if (formData.email) params.set("recipients", formData.email);
+              if (formData.phoneNumber) params.set("phoneNumber", formData.phoneNumber);
               params.set("from", "birthday");
               params.set("birthdayId", createdBirthday.id);
+              params.set("name", birthdayName);
               router.push(`/gifts?${params.toString()}`);
             }}
             className="tg-button-primary w-full text-sm"
@@ -146,6 +151,7 @@ export default function AddBirthdayPage() {
                 name: "",
                 telegramHandle: "",
                 email: "",
+                phoneNumber: "",
                 month: new Date().getMonth() + 1,
                 day: new Date().getDate(),
                 year: undefined,
@@ -209,6 +215,19 @@ export default function AddBirthdayPage() {
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="email@example.com"
+              className="w-full p-3 border border-gray-300 rounded-lg text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-2">
+              Phone Number (optional)
+            </label>
+            <input
+              type="tel"
+              value={formData.phoneNumber}
+              onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+              placeholder="+1234567890"
               className="w-full p-3 border border-gray-300 rounded-lg text-sm"
             />
           </div>

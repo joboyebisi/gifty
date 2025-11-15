@@ -4,6 +4,7 @@ import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTelegram } from "../../hooks/useTelegram";
 import { WalletBalance } from "../../components/WalletBalance";
 import { CircleSmartWallet } from "../../components/CircleSmartWallet";
+import { CircleSmartAccountVerification } from "../../components/CircleSmartAccountVerification";
 import Link from "next/link";
 
 interface BalanceData {
