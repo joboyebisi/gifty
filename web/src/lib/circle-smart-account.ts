@@ -22,13 +22,24 @@ export async function createCircleSmartAccountFromDynamic(
   walletClient: any // Dynamic wallet client from useWalletClient()
 ): Promise<SmartAccount> {
   const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
-  const clientUrl = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL || "https://api.circle.com/v1/w3s";
+  // IMPORTANT: Get the exact Client URL from Circle Console → Modular Wallets → Configurator
+  // Example: https://modular-sdk.circle.com/v1/rpc/w3s/buidl
+  // The code will append the network name (e.g., /arc) to create the full URL
+  // Final URL will be: https://modular-sdk.circle.com/v1/rpc/w3s/buidl/arc
+  const clientUrl = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL || "https://modular-sdk.circle.com/v1/rpc/w3s/buidl";
 
   if (!clientKey) {
     throw new Error(
       "NEXT_PUBLIC_CIRCLE_CLIENT_KEY is REQUIRED for gasless transactions. " +
       "Get it from Circle Console → Keys → Create Client Key. " +
       "Without this, transactions will fail."
+    );
+  }
+
+  if (!process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL) {
+    console.warn(
+      "⚠️ NEXT_PUBLIC_CIRCLE_CLIENT_URL not set. Using default sandbox URL. " +
+      "Get the exact Client URL from Circle Console → Modular Wallets → Configurator and set it in Vercel environment variables."
     );
   }
 

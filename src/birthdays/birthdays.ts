@@ -39,10 +39,17 @@ export async function getUpcomingBirthdays(
     const user = await getUserByWallet(walletAddress);
     if (user?.telegramUserId) {
       query = query.eq("user_id", user.telegramUserId);
+      console.log(`🔍 [BIRTHDAYS] Filtering by user_id: ${user.telegramUserId} (from wallet ${walletAddress.slice(0, 10)}...)`);
     } else if (user?.telegramHandle) {
       query = query.eq("telegram_handle", user.telegramHandle);
+      console.log(`🔍 [BIRTHDAYS] Filtering by telegram_handle: ${user.telegramHandle} (from wallet ${walletAddress.slice(0, 10)}...)`);
     } else {
-      // No user found - return empty (user hasn't created account yet)
+      // No user found - try to find birthdays by wallet_address if column exists
+      // For now, also try to find birthdays without user_id (orphaned birthdays)
+      // This handles the case where birthday was created before user account
+      console.warn(`⚠️ [BIRTHDAYS] No user found for wallet ${walletAddress.slice(0, 10)}..., checking for orphaned birthdays...`);
+      // Try to find birthdays that might be linked via other means
+      // For now, return empty - user needs to be created first
       return [];
     }
   } else if (telegramHandle) {

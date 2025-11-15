@@ -763,15 +763,39 @@ app.post("/api/birthdays", async (req: any, res: any) => {
       return res.status(500).json({ error: "Database not configured" });
     }
 
-    // If userId not provided but we have walletAddress, get user
+    // If userId not provided but we have walletAddress, get or create user
     let finalUserId = userId;
     if (!finalUserId && req.body.walletAddress) {
-      const { getUserByWallet } = await import("./users/users");
-      const user = await getUserByWallet(req.body.walletAddress);
+      const { getUserByWallet, createOrUpdateUser } = await import("./users/users");
+      let user = await getUserByWallet(req.body.walletAddress);
+      
+      // If user doesn't exist, create them (auto-create user account)
+      if (!user) {
+        console.log(`🔍 [BIRTHDAYS] User not found for wallet ${req.body.walletAddress.slice(0, 10)}..., creating user...`);
+        try {
+          user = await createOrUpdateUser({
+            walletAddress: req.body.walletAddress,
+            telegramHandle: telegramHandle ? telegramHandle.replace("@", "") : undefined,
+            email: email || undefined,
+          });
+          console.log(`✅ [BIRTHDAYS] User created: ${user.id}`);
+        } catch (createError: any) {
+          console.error(`❌ [BIRTHDAYS] Failed to create user:`, createError.message);
+          // Continue anyway - birthday can still be created without user link
+        }
+      }
+      
       if (user?.telegramUserId) {
         finalUserId = user.telegramUserId;
       } else if (user?.id) {
         finalUserId = user.id;
+      }
+      
+      // Log for debugging
+      if (finalUserId) {
+        console.log(`✅ [BIRTHDAYS] Birthday will be linked to user_id: ${finalUserId}`);
+      } else {
+        console.warn(`⚠️ [BIRTHDAYS] Could not determine user_id for wallet ${req.body.walletAddress.slice(0, 10)}...`);
       }
     }
 
