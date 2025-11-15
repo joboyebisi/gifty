@@ -24,8 +24,56 @@ export default function WalletPage() {
   const [balances, setBalances] = useState<BalanceData | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [circleWalletId, setCircleWalletId] = useState<string | null>(null);
+  const [creatingCircleWallet, setCreatingCircleWallet] = useState(false);
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+  // Fetch Circle wallet status
+  useEffect(() => {
+    if (primaryWallet?.address) {
+      fetch(`${API}/api/users/me?walletAddress=${primaryWallet.address}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.user?.circleWalletId) {
+            setCircleWalletId(data.user.circleWalletId);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch Circle wallet status:", err);
+        });
+    }
+  }, [primaryWallet?.address, API]);
+
+  // Function to create Circle wallet
+  const createCircleWallet = async () => {
+    if (!primaryWallet?.address) return;
+    
+    setCreatingCircleWallet(true);
+    try {
+      const res = await fetch(`${API}/api/wallet/create-circle-wallet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: primaryWallet.address,
+          telegramUserId: isTelegram && tgUser?.id ? tgUser.id.toString() : undefined,
+          telegramHandle: isTelegram && tgUser?.username ? tgUser.username : undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.circleWalletId) {
+        setCircleWalletId(data.circleWalletId);
+        alert("✅ Circle wallet created! You can now use fiat funding.");
+      } else {
+        alert(data.error || "Failed to create Circle wallet");
+      }
+    } catch (err: any) {
+      console.error("Failed to create Circle wallet:", err);
+      alert("❌ Failed to create Circle wallet. Please try again.");
+    } finally {
+      setCreatingCircleWallet(false);
+    }
+  };
 
   useEffect(() => {
     if (!primaryWallet?.address) {
@@ -192,6 +240,33 @@ export default function WalletPage() {
         </button>
       </div>
 
+      {/* Circle Wallet Status */}
+      {circleWalletId ? (
+        <div className="tg-card p-3 mb-4 bg-green-50 border border-green-200">
+          <div className="text-xs text-green-800">
+            <strong>✅ Circle Wallet Ready</strong>
+            <div className="font-mono text-xs mt-1 break-all">{circleWalletId.slice(0, 20)}...</div>
+            <div className="text-xs text-green-600 mt-1">You can use fiat funding</div>
+          </div>
+        </div>
+      ) : (
+        <div className="tg-card p-3 mb-4 bg-yellow-50 border border-yellow-200">
+          <div className="text-xs text-yellow-800 mb-2">
+            <strong>⚠️ Circle Wallet Not Set Up</strong>
+            <div className="text-xs text-yellow-600 mt-1">
+              Create a Circle wallet to enable fiat funding
+            </div>
+          </div>
+          <button
+            onClick={createCircleWallet}
+            disabled={creatingCircleWallet}
+            className="tg-button-primary w-full text-xs"
+          >
+            {creatingCircleWallet ? "Creating..." : "🔧 Create Circle Wallet"}
+          </button>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="space-y-2 mb-4">
         <Link href="/swap" className="tg-button-primary w-full text-center block">
@@ -203,6 +278,16 @@ export default function WalletPage() {
             onClick={async () => {
               if (!primaryWallet?.address) return;
               
+              if (!circleWalletId) {
+                const create = confirm("⚠️ Circle wallet not found. Create one now to enable fiat funding?\n\n(You can also fund directly on-chain using faucets)");
+                if (create) {
+                  await createCircleWallet();
+                  return;
+                }
+                alert("💵 On-Chain Funding\n\nYou can fund directly on-chain:\n\n• Sepolia: Use faucets to get ETH and USDC\n• Arc Testnet: Use faucets to get USDC\n\nOr create a Circle wallet for fiat funding.");
+                return;
+              }
+              
               const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
               try {
                 const res = await fetch(`${API}/api/onramp/wire-instructions`, {
@@ -213,7 +298,7 @@ export default function WalletPage() {
                 const data = await res.json();
                 
                 if (data.requiresCircleWallet) {
-                  alert(`⚠️ ${data.error}\n\nTo use fiat funding, you need a Circle wallet. For now, you can fund directly on-chain:\n\n• Sepolia: Use faucets to get ETH and USDC\n• Arc Testnet: Use faucets to get USDC`);
+                  alert(`⚠️ ${data.error}\n\nTo use fiat funding, you need a Circle wallet. Click "Create Circle Wallet" above.`);
                 } else {
                   alert(`💵 Fund Wallet (Fiat to Crypto)\n\n${data.message}\n\n${data.instructions.join("\n")}\n\n${data.note}`);
                 }

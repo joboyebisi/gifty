@@ -706,6 +706,7 @@ export async function handleGiftForHandle(bot: TelegramBot, chatId: number, user
 
 export async function handleWalletCommand(bot: TelegramBot, chatId: number, userId: number): Promise<void> {
   try {
+    // Escape HTML in all user-facing strings to prevent parsing errors
     const env = loadEnv();
     const frontendUrl = env.FRONTEND_URL || "https://gifties-w3yr.vercel.app";
     const user = await getUserByTelegramId(userId.toString());
@@ -830,7 +831,13 @@ export async function handleWalletCommand(bot: TelegramBot, chatId: number, user
       }
     } else if (balanceError) {
       message += `⚠️ <b>Balance:</b> Error checking balances\n`;
-      message += `<code>${balanceError}</code>\n\n`;
+      // Escape HTML special characters in error message
+      const escapedError = balanceError
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+      message += `<code>${escapedError}</code>\n\n`;
       message += `💡 <b>Tip:</b> If you just funded your wallet, wait a moment and refresh.\n\n`;
     }
     

@@ -18,6 +18,7 @@ export default function ComposePageClient() {
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState("10.00");
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (recipientsParam) {
@@ -28,6 +29,7 @@ export default function ComposePageClient() {
   async function generatePersona() {
     setLoading(true);
     setMessages([]);
+    setError(null);
     try {
       const res = await fetch(`${API}/api/ai/persona`, {
         method: "POST",
@@ -40,8 +42,15 @@ export default function ComposePageClient() {
           recipientHandle: "alex",
         }),
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Failed to generate persona" }));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setPersona(data.persona || "");
+    } catch (err: any) {
+      console.error("Error generating persona:", err);
+      setError(err?.message || "Failed to generate persona. Please check your API keys.");
     } finally {
       setLoading(false);
     }
@@ -50,6 +59,7 @@ export default function ComposePageClient() {
   async function generateMessages() {
     if (!persona) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`${API}/api/ai/messages`, {
         method: "POST",
@@ -63,8 +73,15 @@ export default function ComposePageClient() {
           recipientHandle: "alex",
         }),
       });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: "Failed to generate messages" }));
+        throw new Error(errorData.error || `HTTP ${res.status}`);
+      }
       const data = await res.json();
       setMessages(data.messages || []);
+    } catch (err: any) {
+      console.error("Error generating messages:", err);
+      setError(err?.message || "Failed to generate messages. Please check your API keys.");
     } finally {
       setLoading(false);
     }
@@ -73,6 +90,11 @@ export default function ComposePageClient() {
   return (
     <div className="tg-viewport max-w-md mx-auto px-4 py-4">
       <h2 className="text-2xl font-bold mb-4 text-center">✍️ Compose a Gift Message</h2>
+      {error && (
+        <div className="tg-card p-3 mb-4 bg-red-50 border border-red-200">
+          <p className="text-xs text-red-800">⚠️ {error}</p>
+        </div>
+      )}
       <div className="tg-card p-4 mb-4">
         <label className="block text-xs font-medium text-gray-700 mb-2">Snippets about recipient</label>
         <textarea className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" rows={5} value={snippets} onChange={(e) => setSnippets(e.target.value)} />

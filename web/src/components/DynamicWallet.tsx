@@ -76,6 +76,34 @@ export function DynamicWallet() {
     }
   }, [primaryWallet?.address, isTelegram, tgUser?.username, tgUser?.id]);
 
+  // Auto-create Circle wallet when wallet connects
+  useEffect(() => {
+    if (primaryWallet?.address) {
+      const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      
+      // Create Circle wallet if user doesn't have one (non-blocking)
+      fetch(`${API}/api/wallet/create-circle-wallet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          walletAddress: primaryWallet.address,
+          telegramUserId: isTelegram && tgUser?.id ? tgUser.id.toString() : undefined,
+          telegramHandle: isTelegram && tgUser?.username ? tgUser.username : undefined,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.circleWalletId) {
+            console.log("✅ Circle wallet ready:", data.circleWalletId.slice(0, 8) + "...");
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to create Circle wallet (non-critical):", err);
+          // Non-critical error - user can still use on-chain funding
+        });
+    }
+  }, [primaryWallet?.address, isTelegram, tgUser?.id, tgUser?.username]);
+
   if (!mounted) {
     return (
       <div className="animate-pulse">

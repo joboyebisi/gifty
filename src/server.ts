@@ -952,6 +952,68 @@ app.post("/api/wallet/circle-id", async (req: any, res: any) => {
   }
 });
 
+// Create Circle wallet for user (auto-creation)
+app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
+  try {
+    const { walletAddress, telegramUserId, telegramHandle } = (req as any).body || {};
+    
+    if (!walletAddress && !telegramUserId) {
+      return res.status(400).json({ error: "walletAddress or telegramUserId required" });
+    }
+
+    const { getUserByWallet, getUserByTelegramId, createOrUpdateUser } = await import("./users/users");
+    
+    // Find user
+    let user = walletAddress 
+      ? await getUserByWallet(walletAddress)
+      : await getUserByTelegramId(telegramUserId);
+    
+    // Create user if doesn't exist
+    if (!user) {
+      console.log(`📝 Auto-creating user for Circle wallet: ${walletAddress?.slice(0, 6) || telegramUserId}...`);
+      user = await createOrUpdateUser({
+        walletAddress,
+        telegramUserId,
+        telegramHandle,
+      });
+    }
+
+    // If user already has Circle wallet, return it
+    if (user.circleWalletId) {
+      return res.json({ 
+        circleWalletId: user.circleWalletId,
+        message: "Circle wallet already exists",
+        user,
+      });
+    }
+
+    // Create new Circle wallet
+    const { CircleWalletClient } = await import("./circle/wallet");
+    const circleClient = new CircleWalletClient();
+    const circleWallet = await circleClient.createWallet();
+
+    console.log(`✅ Created Circle wallet ${circleWallet.id} for user ${user.id}`);
+
+    // Update user with Circle wallet ID
+    const updatedUser = await createOrUpdateUser({
+      walletAddress: user.walletAddress,
+      telegramHandle: user.telegramHandle,
+      email: user.email,
+      telegramUserId: user.telegramUserId,
+      circleWalletId: circleWallet.id,
+    });
+
+    res.json({ 
+      circleWalletId: circleWallet.id,
+      user: updatedUser,
+      message: "Circle wallet created successfully" 
+    });
+  } catch (err: any) {
+    console.error("Error creating Circle wallet:", err);
+    res.status(500).json({ error: err?.message || "Failed to create Circle wallet" });
+  }
+});
+
 // Telegram webhook endpoint
 app.post("/api/telegram/webhook", async (req: any, res: any) => {
   // Always respond to Telegram immediately to avoid timeout

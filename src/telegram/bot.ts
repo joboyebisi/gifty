@@ -233,62 +233,61 @@ export async function handleBotCommand(update: TelegramUpdate): Promise<void> {
       // Use the new handleStartCommand which supports deeplinks
       await handleStartCommand(update);
     } else if (command === "/help") {
-      const helpMessage = `🤖 <b>Gifties Bot - Complete Command Guide</b>\n\n` +
-        `📋 <b>Basic Commands</b>\n` +
-        `/start - Start the bot and see welcome message\n` +
-        `/help - Show this help message with all commands\n` +
-        `/open - Open Gifties Mini App\n\n` +
-        `🎁 <b>Gift Commands</b>\n` +
-        `/compose - Open Mini App to compose a personalized gift\n` +
-        `/compose @username - Generate AI-powered gift suggestion for user\n` +
-        `/sendgift @username - Send gift to a user by handle (creates USDC gift with claimable link)\n` +
-        `/birthdays - View upcoming birthdays (next 30 days)\n` +
-        `/giftlink - View your pending gifts and claim links\n\n` +
-        `💼 <b>Wallet Commands</b>\n` +
-        `/wallet - View your wallet address, balance, and funding instructions\n\n` +
-        `🌐 <b>Transfer & Swap Commands</b>\n` +
-        `/transfer <amount> <chain> <recipient> - Cross-chain USDC transfer using CCTP\n` +
-        `  Example: /transfer 10 arc-testnet @username\n` +
-        `/swap <amount> <token> - Swap tokens (ETH ↔ USDC)\n` +
-        `  Example: /swap 0.1 ETH\n\n` +
-        `🎯 <b>How It Works</b>\n` +
-        `1. Connect your wallet in the Mini App\n` +
-        `2. Add birthdays or use /sendgift @username\n` +
-        `3. Bot generates personalized message and gift suggestion\n` +
-        `4. Send gift via Goody (physical) or USDC (crypto)\n` +
-        `5. Share gift link with recipient\n\n` +
-        `💡 <b>Tips</b>\n` +
-        `• Use buttons in messages for quick actions\n` +
-        `• Commands work in both private chats and groups\n` +
-        `• Connect your wallet first to enable all features\n` +
-        `• Fund your wallet to send gifts\n` +
-        `• Bot checks balance before sending gifts\n` +
-        `• Use /transfer for cross-chain USDC transfers\n` +
-        `• Use /swap to convert ETH to USDC (or vice versa)\n\n` +
-        `🎂 <b>Birthday Features</b>\n` +
-        `• View upcoming birthdays with /birthdays\n` +
-        `• Click on a birthday to generate gift suggestion\n` +
-        `• Bot creates personalized message using AI\n` +
-        `• Send physical gifts via Goody or USDC\n\n` +
-        `🔗 <b>Need Help?</b>\n` +
-        `• Use /wallet to get funding instructions\n` +
-        `• Check balance before sending gifts\n` +
-        `• All commands work in groups too!`;
-      
-      await bot.sendMessage(chatId, helpMessage, {
-        parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: "🎁 Open Mini App", web_app: { url: frontendUrl } },
+      try {
+        const helpMessage = `🤖 <b>Gifty Bot - Complete Command Guide</b>\n\n` +
+          `📋 <b>Basic Commands</b>\n` +
+          `/start - Start the bot and see welcome message\n` +
+          `/help - Show this help message with all commands\n` +
+          `/open - Open Gifty Mini App\n\n` +
+          `🎁 <b>Gift Commands</b>\n` +
+          `/compose - Open Mini App to compose a personalized gift\n` +
+          `/compose @username - Generate AI-powered gift suggestion for user\n` +
+          `/sendgift @username - Send gift to a user by handle\n` +
+          `/birthdays - View upcoming birthdays\n` +
+          `/giftlink - View your pending gifts and claim links\n\n` +
+          `💼 <b>Wallet Commands</b>\n` +
+          `/wallet - View your wallet address and balance\n\n` +
+          `🌐 <b>Transfer & Swap Commands</b>\n` +
+          `/transfer - Cross-chain USDC transfer using CCTP\n` +
+          `/swap - Swap tokens (ETH ↔ USDC)\n\n` +
+          `🎯 <b>How It Works</b>\n` +
+          `1. Connect your wallet in the Mini App\n` +
+          `2. Use /sendgift @username to send gifts\n` +
+          `3. Bot generates personalized message\n` +
+          `4. Share gift link with recipient\n\n` +
+          `💡 <b>Tips</b>\n` +
+          `• Use buttons in messages for quick actions\n` +
+          `• Connect your wallet first\n` +
+          `• Fund your wallet to send gifts\n\n` +
+          `🔗 <b>Need Help?</b>\n` +
+          `• Use /wallet to get funding instructions\n` +
+          `• All commands work in groups too!`;
+        
+        await bot.sendMessage(chatId, helpMessage, {
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: "🎁 Open Mini App", web_app: { url: frontendUrl } },
+              ],
+              [
+                { text: "💼 Check Wallet", callback_data: "check_wallet" },
+                { text: "🎂 View Birthdays", callback_data: "birthdays" },
+              ],
             ],
-            [
-              { text: "💼 Check Wallet", callback_data: "check_wallet" },
-              { text: "🎂 View Birthdays", callback_data: "birthdays" },
+          },
+        });
+      } catch (error: any) {
+        console.error("Error sending help message:", error);
+        // Fallback to plain text if HTML fails
+        await bot.sendMessage(chatId, `🤖 Gifty Bot Commands:\n\n/start - Start bot\n/wallet - View wallet\n/compose - Compose gift\n/sendgift @username - Send gift\n/birthdays - View birthdays\n/help - Show this help`, {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🎁 Open Mini App", web_app: { url: frontendUrl } }],
             ],
-          ],
-        },
-      });
+          },
+        });
+      }
     } else if (command === "/open") {
       await bot.sendMessage(chatId, `🎁 Opening Gifties...`, {
       reply_markup: {
