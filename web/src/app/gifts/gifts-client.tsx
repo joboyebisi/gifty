@@ -154,6 +154,8 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
   const searchParams = useSearchParams();
   const address = primaryWallet?.address;
   const isConnected = !!primaryWallet && !!dynamicUser;
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
+  const [loadingSmartAccount, setLoadingSmartAccount] = useState(false);
   const [step, setStep] = useState<"recipient" | "amount" | "message" | "chains" | "review">("recipient");
   const [formData, setFormData] = useState({
     recipientHandle: "",
@@ -174,6 +176,48 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
   const [claimCode, setClaimCode] = useState("");
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+
+  // Get Circle Smart Account address for gasless transactions
+  useEffect(() => {
+    async function getSmartAccountAddress() {
+      if (!primaryWallet?.address) {
+        setSmartAccountAddress(null);
+        return;
+      }
+
+      setLoadingSmartAccount(true);
+      try {
+        const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
+        if (!clientKey) {
+          console.log("Circle Client Key not configured");
+          setSmartAccountAddress(null);
+          return;
+        }
+
+        // Wait a bit for Dynamic wallet to initialize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const dynamicWalletClient = await (primaryWallet as any).getWalletClient?.();
+        if (!dynamicWalletClient) {
+          console.log("Waiting for wallet client...");
+          setSmartAccountAddress(null);
+          return;
+        }
+
+        const { createCircleSmartAccountFromDynamic } = await import("../../lib/circle-smart-account");
+        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
+        setSmartAccountAddress(smartAccount.address);
+        console.log("✅ Circle Smart Account loaded for gift sending:", smartAccount.address);
+      } catch (err: any) {
+        console.error("Error loading Circle Smart Account:", err);
+        setSmartAccountAddress(null);
+      } finally {
+        setLoadingSmartAccount(false);
+      }
+    }
+
+    getSmartAccountAddress();
+  }, [primaryWallet?.address]);
 
   // Prefill from URL params (from birthday page or other sources)
   useEffect(() => {
@@ -261,6 +305,20 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
       return;
     }
 
+    // Use Smart Account if available, otherwise fallback to primary wallet
+    const senderWallet = smartAccountAddress || address;
+    const walletType = smartAccountAddress ? "Circle Smart Account (Gasless)" : "Primary Wallet";
+    
+    if (smartAccountAddress) {
+      const confirm = window.confirm(
+        `Using ${walletType}:\n${smartAccountAddress.slice(0, 6)}...${smartAccountAddress.slice(-4)}\n\n` +
+        `Amount: ${formData.amount} USDC\n\n` +
+        `⚠️ Make sure you have sufficient balance in your Smart Account!\n\n` +
+        `Continue?`
+      );
+      if (!confirm) return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`${API}/api/gifts/create`, {
@@ -273,7 +331,7 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
           srcChain: formData.srcChain,
           dstChain: formData.dstChain,
           message: selectedMessage || formData.message,
-          senderWalletAddress: address,
+          senderWalletAddress: senderWallet, // Use Smart Account for gasless transactions
           expiresInDays: 90,
         }),
       });
@@ -581,16 +639,49 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
             </div>
           )}
 
+          {/* Wallet Selection Info */}
+          {isConnected && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <div className="flex items-start gap-2">
+                <div className="text-blue-600 text-sm">⚡</div>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-blue-800 mb-1">
+                    Using Circle Smart Account (Gasless)
+                  </p>
+                  {loadingSmartAccount ? (
+                    <p className="text-xs text-blue-600">Loading Smart Account...</p>
+                  ) : smartAccountAddress ? (
+                    <div>
+                      <p className="text-xs text-blue-700 mb-1">
+                        Smart Account: <span className="font-mono text-xs">{smartAccountAddress.slice(0, 6)}...{smartAccountAddress.slice(-4)}</span>
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        ⚠️ Ensure you have sufficient USDC in your Smart Account. Transactions are gasless!
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-blue-600">
+                      ⚠️ Smart Account not available. Will use Primary Wallet: <span className="font-mono">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button onClick={() => setStep("message")} className="tg-button-secondary flex-1">
               ← Back
             </button>
             <button
               onClick={createGift}
-              disabled={loading || !isConnected}
+              disabled={loading || !isConnected || (loadingSmartAccount && !smartAccountAddress)}
               className="tg-button-primary flex-1"
             >
-              {loading ? "Creating & Escrowing..." : "🎁 Create Gift"}
+              {loading ? "Creating & Escrowing..." : 
+               loadingSmartAccount ? "⏳ Loading Smart Account..." :
+               smartAccountAddress ? "⚡ Create Gift (Gasless)" : 
+               "🎁 Create Gift"}
             </button>
           </div>
         </div>

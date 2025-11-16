@@ -3,12 +3,16 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAccount } from "wagmi";
+import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function ComposePageClient() {
   const searchParams = useSearchParams();
   const { address, isConnected } = useAccount();
+  const { primaryWallet } = useDynamicContext();
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
+  const [loadingSmartAccount, setLoadingSmartAccount] = useState(false);
   const recipientsParam = searchParams.get("recipients");
   const [recipients, setRecipients] = useState(recipientsParam || "");
   const [snippets, setSnippets] = useState("They love sci-fi\nShipping features fast 🚀");
@@ -25,6 +29,48 @@ export default function ComposePageClient() {
       setRecipients(recipientsParam);
     }
   }, [recipientsParam]);
+
+  // Get Circle Smart Account address for gasless transactions
+  useEffect(() => {
+    async function getSmartAccountAddress() {
+      if (!primaryWallet?.address) {
+        setSmartAccountAddress(null);
+        return;
+      }
+
+      setLoadingSmartAccount(true);
+      try {
+        const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
+        if (!clientKey) {
+          console.log("Circle Client Key not configured");
+          setSmartAccountAddress(null);
+          return;
+        }
+
+        // Wait a bit for Dynamic wallet to initialize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const dynamicWalletClient = await (primaryWallet as any).getWalletClient?.();
+        if (!dynamicWalletClient) {
+          console.log("Waiting for wallet client...");
+          setSmartAccountAddress(null);
+          return;
+        }
+
+        const { createCircleSmartAccountFromDynamic } = await import("../../lib/circle-smart-account");
+        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
+        setSmartAccountAddress(smartAccount.address);
+        console.log("✅ Circle Smart Account loaded for gift sending:", smartAccount.address);
+      } catch (err: any) {
+        console.error("Error loading Circle Smart Account:", err);
+        setSmartAccountAddress(null);
+      } finally {
+        setLoadingSmartAccount(false);
+      }
+    }
+
+    getSmartAccountAddress();
+  }, [primaryWallet?.address]);
 
   async function generatePersona() {
     setLoading(true);
@@ -149,6 +195,37 @@ export default function ComposePageClient() {
                   <Link href="/" className="tg-button-primary text-center block text-xs">Connect Wallet</Link>
                 </div>
               )}
+              
+              {/* Wallet Selection Info */}
+              {isConnected && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-start gap-2">
+                    <div className="text-blue-600 text-sm">⚡</div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-blue-800 mb-1">
+                        Using Circle Smart Account (Gasless)
+                      </p>
+                      {loadingSmartAccount ? (
+                        <p className="text-xs text-blue-600">Loading Smart Account...</p>
+                      ) : smartAccountAddress ? (
+                        <div>
+                          <p className="text-xs text-blue-700 mb-1">
+                            Smart Account: <span className="font-mono text-xs">{smartAccountAddress.slice(0, 6)}...{smartAccountAddress.slice(-4)}</span>
+                          </p>
+                          <p className="text-xs text-blue-600">
+                            ⚠️ Ensure you have sufficient USDC in your Smart Account. Transactions are gasless!
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-blue-600">
+                          ⚠️ Smart Account not available. Will use Primary Wallet: <span className="font-mono">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <button
                 onClick={async () => {
                   if (!isConnected || !address) {
@@ -159,6 +236,21 @@ export default function ComposePageClient() {
                     alert("Please enter recipients and amount");
                     return;
                   }
+                  
+                  // Use Smart Account if available, otherwise fallback to primary wallet
+                  const senderWallet = smartAccountAddress || address;
+                  const walletType = smartAccountAddress ? "Circle Smart Account (Gasless)" : "Primary Wallet";
+                  
+                  if (smartAccountAddress) {
+                    const confirm = window.confirm(
+                      `Using ${walletType}:\n${smartAccountAddress.slice(0, 6)}...${smartAccountAddress.slice(-4)}\n\n` +
+                      `Amount: ${amount} USDC\n\n` +
+                      `⚠️ Make sure you have sufficient balance in your Smart Account!\n\n` +
+                      `Continue?`
+                    );
+                    if (!confirm) return;
+                  }
+                  
                   setSending(true);
                   try {
                     const res = await fetch(`${API}/api/gifts/create`, {
@@ -168,12 +260,18 @@ export default function ComposePageClient() {
                         recipientHandle: recipients.split(",")[0],
                         amountUsdc: amount,
                         message: selectedMessage,
-                        senderWalletAddress: address, // Required for escrow funding
+                        senderWalletAddress: senderWallet, // Use Smart Account for gasless transactions
                       }),
                     });
                     const data = await res.json();
                     if (res.ok && data.claimUrl) {
-                      alert(`Gift created and escrowed! Share this link: ${data.claimUrl}\n\nFunds are locked in escrow and ready to claim.`);
+                      alert(
+                        `✅ Gift created and escrowed!\n\n` +
+                        `Wallet Used: ${walletType}\n` +
+                        `Amount: ${amount} USDC\n\n` +
+                        `Share this link: ${data.claimUrl}\n\n` +
+                        `Funds are locked in escrow and ready to claim.`
+                      );
                     } else {
                       alert(data.error || "Failed to create gift");
                     }
@@ -183,10 +281,13 @@ export default function ComposePageClient() {
                     setSending(false);
                   }
                 }}
-                disabled={sending || !isConnected}
+                disabled={sending || !isConnected || (loadingSmartAccount && !smartAccountAddress)}
                 className="tg-button-primary w-full text-sm"
               >
-                {sending ? "Creating & Escrowing..." : "🎁 Create Gift & Escrow"}
+                {sending ? "Creating & Escrowing..." : 
+                 loadingSmartAccount ? "⏳ Loading Smart Account..." :
+                 smartAccountAddress ? "⚡ Create Gift (Gasless)" : 
+                 "🎁 Create Gift & Escrow"}
               </button>
             </div>
           )}

@@ -39,6 +39,43 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
   const [status, setStatus] = useState<BridgeStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
   const [result, setResult] = useState<{ success: boolean; message: string; txHashes?: { approval?: string; burn?: string; mint?: string } } | null>(null);
+  const [walletClientReady, setWalletClientReady] = useState(false);
+  const [primaryWalletClient, setPrimaryWalletClient] = useState<any>(null);
+  
+  // Check if wallet client is ready - prioritize primaryWallet first
+  useEffect(() => {
+    async function checkWalletClient() {
+      // Priority 1: Try to get wallet client from primaryWallet first
+      if (primaryWallet) {
+        try {
+          const client = await (primaryWallet as any).getWalletClient?.();
+          if (client) {
+            setPrimaryWalletClient(client);
+            setWalletClientReady(true);
+            return;
+          }
+        } catch (err) {
+          console.log("⏳ Primary wallet client not ready yet...", err);
+        }
+      }
+      
+      // Priority 2: Fallback to wagmi's walletClient if primaryWallet not available
+      if (walletClient) {
+        setPrimaryWalletClient(null); // Clear primary wallet client
+        setWalletClientReady(true);
+        return;
+      }
+      
+      // Neither available
+      setPrimaryWalletClient(null);
+      setWalletClientReady(false);
+    }
+    
+    checkWalletClient();
+    // Check periodically until wallet client is ready
+    const interval = setInterval(checkWalletClient, 1000);
+    return () => clearInterval(interval);
+  }, [primaryWallet, walletClient]);
 
   const handleTransfer = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -46,8 +83,34 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
       return;
     }
 
-    if (!primaryWallet || !walletClient) {
-      setResult({ success: false, message: "Wallet not connected" });
+    // Check if we have at least one wallet available
+    if (!primaryWallet && !walletClient) {
+      setResult({ success: false, message: "Wallet not connected. Please connect your wallet first." });
+      return;
+    }
+    
+    // Priority 1: Use primaryWallet client first
+    let client = null;
+    if (primaryWalletClient) {
+      client = primaryWalletClient;
+    } else if (primaryWallet) {
+      try {
+        client = await (primaryWallet as any).getWalletClient?.();
+        if (client) {
+          setPrimaryWalletClient(client); // Cache it
+        }
+      } catch (err) {
+        console.error("Failed to get primary wallet client:", err);
+      }
+    }
+    
+    // Priority 2: Fallback to wagmi's walletClient if primaryWallet not available
+    if (!client && walletClient) {
+      client = walletClient;
+    }
+    
+    if (!client) {
+      setResult({ success: false, message: "Wallet client not ready. Please wait a moment and try again." });
       return;
     }
 
@@ -68,7 +131,7 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
       // Create adapter from wallet client
       setStatusMessage("Creating adapter...");
       const adapter = await createAdapterFromProvider({
-        provider: walletClient.transport as any,
+        provider: client.transport as any,
       });
 
       // Initialize BridgeKit (no config needed - uses default CCTPv2 provider)
@@ -337,11 +400,21 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
       {/* Transfer Button */}
       <button
         onClick={handleTransfer}
-        disabled={status !== "idle" || !amount || parseFloat(amount) <= 0 || !walletClient}
+        disabled={status !== "idle" || !amount || parseFloat(amount) <= 0 || !walletClientReady || (!primaryWallet && !walletClient)}
         className="tg-button-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {status !== "idle" ? `⏳ ${statusMessage}` : "🌉 Bridge USDC"}
+        {status !== "idle" ? `⏳ ${statusMessage}` : 
+         !walletClientReady ? "⏳ Waiting for wallet..." :
+         (!primaryWallet && !walletClient) ? "🔌 Connect Wallet" :
+         "🌉 Bridge USDC"}
       </button>
+      
+      {/* Debug info (remove in production) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="text-xs text-gray-400 mt-2">
+          Debug: primaryWallet={primaryWallet ? "✓" : "✗"}, primaryWalletClient={primaryWalletClient ? "✓" : "✗"}, wagmiClient={walletClient ? "✓" : "✗"}, ready={walletClientReady ? "✓" : "✗"}
+        </div>
+      )}
 
       <p className="text-xs text-gray-500 mt-3 text-center">
         Powered by Circle BridgeKit • All transfers use CCTP protocol and settle on Arc network
