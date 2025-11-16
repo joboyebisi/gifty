@@ -44,10 +44,10 @@ export async function createCircleSmartAccountFromDynamic(
     );
   }
 
-  const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "arc").toLowerCase();
+  const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "arc-testnet").toLowerCase();
   const networkPath =
     process.env.NEXT_PUBLIC_CIRCLE_NETWORK_PATH ||
-    (rawNetwork === "arc-testnet" ? "arc" : rawNetwork);
+    (rawNetwork === "arc" ? "arc-testnet" : rawNetwork);
 
   const normalizedClientUrl = clientUrl.replace(/\/$/, "");
 
