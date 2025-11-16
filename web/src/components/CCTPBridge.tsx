@@ -131,16 +131,155 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
     setResult(null);
 
     try {
-      // Create adapter from wallet client
+      // Get the source chain ID FIRST
+      const sourceChainId = sourceChain === "eth-sepolia" ? sepoliaTestnet.id : arcTestnet.id;
+      
+      // CRITICAL: Switch to source chain BEFORE creating adapter
+      // The adapter must be created with the correct chain state
+      const actualCurrentChain = primaryWallet?.chain 
+        ? (typeof primaryWallet.chain === 'number' 
+          ? primaryWallet.chain 
+          : parseInt(primaryWallet.chain.toString(), 10))
+        : currentChainId;
+      
+      console.log(`🔍 Chain check - Dynamic: ${actualCurrentChain}, Wagmi: ${currentChainId}, Need: ${sourceChainId}`);
+      
+      if (actualCurrentChain !== sourceChainId) {
+        setStatus("initializing");
+        setStatusMessage(`Switching to ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"}...`);
+        
+        console.log(`🔄 Current chain: ${actualCurrentChain}, Need: ${sourceChainId}. Switching...`);
+        
+        try {
+          // Priority 1: Try Dynamic's chain switching method
+          if (primaryWallet && typeof (primaryWallet as any).setChain === 'function') {
+            console.log("🔄 Using Dynamic's setChain method...");
+            await (primaryWallet as any).setChain({ chainId: sourceChainId });
+          } 
+          // Priority 2: Try wagmi's switchChain
+          else if (switchChain) {
+            console.log("🔄 Using wagmi's switchChain method...");
+            await switchChain({ chainId: sourceChainId as any });
+          }
+          // Priority 3: Try window.ethereum
+          else if (typeof window !== 'undefined' && (window as any).ethereum) {
+            console.log("🔄 Using window.ethereum to switch chain...");
+            const chainConfig = sourceChainId === sepoliaTestnet.id ? sepoliaTestnet : arcTestnet;
+            await (window as any).ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: `0x${sourceChainId.toString(16)}` }],
+            }).catch(async (error: any) => {
+              // If chain not found, add it first
+              if (error.code === 4902) {
+                await (window as any).ethereum.request({
+                  method: 'wallet_addEthereumChain',
+                  params: [{
+                    chainId: `0x${sourceChainId.toString(16)}`,
+                    chainName: chainConfig.name,
+                    nativeCurrency: chainConfig.nativeCurrency,
+                    rpcUrls: [chainConfig.rpcUrls.default.http[0]],
+                    blockExplorerUrls: chainConfig.blockExplorers?.default?.url ? [chainConfig.blockExplorers.default.url] : undefined,
+                  }],
+                });
+                // Retry switch after adding
+                await (window as any).ethereum.request({
+                  method: 'wallet_switchEthereumChain',
+                  params: [{ chainId: `0x${sourceChainId.toString(16)}` }],
+                });
+              } else {
+                throw error;
+              }
+            });
+          } else {
+            throw new Error("No chain switching method available");
+          }
+          
+          // Wait and verify the chain switch succeeded
+          // Poll the wallet client to ensure the chain actually switched
+          let switchConfirmed = false;
+          for (let i = 0; i < 15; i++) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Get fresh wallet client to check chain
+            let freshClient = client;
+            if (primaryWallet && typeof (primaryWallet as any).getWalletClient === 'function') {
+              try {
+                freshClient = await (primaryWallet as any).getWalletClient();
+              } catch (e) {
+                // Ignore errors getting fresh client
+              }
+            }
+            
+            // Check both Dynamic wallet chain and wagmi wallet client chain
+            const newDynamicChain = primaryWallet?.chain 
+              ? (typeof primaryWallet.chain === 'number' 
+                ? primaryWallet.chain 
+                : parseInt(primaryWallet.chain.toString(), 10))
+              : null;
+            const newWagmiChain = freshClient?.chain?.id || walletClient?.chain?.id;
+            
+            console.log(`⏳ Waiting for chain switch... Attempt ${i + 1}/15 - Dynamic: ${newDynamicChain}, Wagmi: ${newWagmiChain}, Need: ${sourceChainId}`);
+            
+            if (newDynamicChain === sourceChainId || newWagmiChain === sourceChainId) {
+              switchConfirmed = true;
+              console.log(`✅ Chain switch confirmed!`);
+              break;
+            }
+          }
+          
+          if (!switchConfirmed) {
+            throw new Error(`Chain switch timeout. Please ensure you're on ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"} and try again.`);
+          }
+          
+          // Final wait to ensure everything is synced
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          
+          // Get a fresh wallet client after chain switch
+          if (primaryWallet && typeof (primaryWallet as any).getWalletClient === 'function') {
+            try {
+              const freshClient = await (primaryWallet as any).getWalletClient();
+              if (freshClient) {
+                // Update the client reference
+                setPrimaryWalletClient(freshClient);
+                // Also update the local client variable
+                client = freshClient;
+              }
+            } catch (e) {
+              console.warn("Could not get fresh wallet client after chain switch:", e);
+            }
+          }
+          
+          console.log(`✅ Successfully switched to chain ${sourceChainId}`);
+        } catch (switchError: any) {
+          console.error("Chain switch error:", switchError);
+          throw new Error(`Failed to switch to ${sourceChain}: ${switchError.message || switchError}. Please switch to ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"} manually and try again.`);
+        }
+      } else {
+        console.log(`✅ Already on source chain: ${sourceChainId}`);
+      }
+
+      // NOW create adapter from wallet client (after chain switch)
       // Priority: Use Dynamic wallet client directly (works in Telegram Mini App without MetaMask)
       // Fallback: Use window.ethereum if available (for browser extensions)
       setStatusMessage("Creating adapter...");
       
       let adapter: any = null;
       
+      // Get fresh client reference (may have changed after chain switch)
+      let currentClient = client;
+      if (primaryWalletClient) {
+        currentClient = primaryWalletClient;
+      } else if (primaryWallet && typeof (primaryWallet as any).getWalletClient === 'function') {
+        try {
+          currentClient = await (primaryWallet as any).getWalletClient();
+        } catch (e) {
+          console.warn("Could not get fresh wallet client:", e);
+        }
+      }
+      
       // Priority 1: Use Dynamic wallet client directly (Telegram Mini App compatible)
       // This works without MetaMask - uses Dynamic's embedded wallet
-      if (client) {
+      if (currentClient) {
         try {
           // Create a provider wrapper from the Dynamic wallet client
           // This allows BridgeKit to work with Dynamic wallets in Telegram Mini Apps
@@ -247,13 +386,13 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
               }
               
               // For other requests, use the client's request method if available
-              if (typeof (client as any).request === 'function') {
-                return (client as any).request(args);
+              if (typeof (currentClient as any).request === 'function') {
+                return (currentClient as any).request(args);
               }
               
               // Fallback to transport if available
-              if ((client as any).transport && typeof (client as any).transport.request === 'function') {
-                return (client as any).transport.request(args);
+              if ((currentClient as any).transport && typeof (currentClient as any).transport.request === 'function') {
+                return (currentClient as any).transport.request(args);
               }
               
               throw new Error(`Method ${args.method} not supported`);
@@ -341,110 +480,6 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
 
       if (!fromChain || !toChain) {
         throw new Error(`Unsupported chain: ${sourceChain} or ${destinationChain}`);
-      }
-
-      // Get the source chain ID
-      const sourceChainId = sourceChain === "eth-sepolia" ? sepoliaTestnet.id : arcTestnet.id;
-      
-      // CRITICAL: Get the ACTUAL current chain from Dynamic wallet (not just wagmi)
-      // Dynamic wallets might have a different chain than wagmi reports
-      const actualCurrentChain = primaryWallet?.chain 
-        ? (typeof primaryWallet.chain === 'number' 
-          ? primaryWallet.chain 
-          : parseInt(primaryWallet.chain.toString(), 10))
-        : currentChainId;
-      
-      console.log(`🔍 Chain check - Dynamic: ${actualCurrentChain}, Wagmi: ${currentChainId}, Need: ${sourceChainId}`);
-      
-      // CRITICAL: Switch to source chain BEFORE calling bridge()
-      // BridgeKit expects the wallet to be on the source chain when it starts
-      if (actualCurrentChain !== sourceChainId) {
-        setStatus("initializing");
-        setStatusMessage(`Switching to ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"}...`);
-        
-        console.log(`🔄 Current chain: ${actualCurrentChain}, Need: ${sourceChainId}. Switching...`);
-        
-        try {
-          // Priority 1: Try Dynamic's chain switching method
-          if (primaryWallet && typeof (primaryWallet as any).setChain === 'function') {
-            console.log("🔄 Using Dynamic's setChain method...");
-            await (primaryWallet as any).setChain({ chainId: sourceChainId });
-          } 
-          // Priority 2: Try wagmi's switchChain
-          else if (switchChain) {
-            console.log("🔄 Using wagmi's switchChain method...");
-            await switchChain({ chainId: sourceChainId as any });
-          }
-          // Priority 3: Try window.ethereum
-          else if (typeof window !== 'undefined' && (window as any).ethereum) {
-            console.log("🔄 Using window.ethereum to switch chain...");
-            const chainConfig = sourceChainId === sepoliaTestnet.id ? sepoliaTestnet : arcTestnet;
-            await (window as any).ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: `0x${sourceChainId.toString(16)}` }],
-            }).catch(async (error: any) => {
-              // If chain not found, add it first
-              if (error.code === 4902) {
-                await (window as any).ethereum.request({
-                  method: 'wallet_addEthereumChain',
-                  params: [{
-                    chainId: `0x${sourceChainId.toString(16)}`,
-                    chainName: chainConfig.name,
-                    nativeCurrency: chainConfig.nativeCurrency,
-                    rpcUrls: [chainConfig.rpcUrls.default.http[0]],
-                    blockExplorerUrls: chainConfig.blockExplorers?.default?.url ? [chainConfig.blockExplorers.default.url] : undefined,
-                  }],
-                });
-                // Retry switch after adding
-                await (window as any).ethereum.request({
-                  method: 'wallet_switchEthereumChain',
-                  params: [{ chainId: `0x${sourceChainId.toString(16)}` }],
-                });
-              } else {
-                throw error;
-              }
-            });
-          } else {
-            throw new Error("No chain switching method available");
-          }
-          
-          // Wait and verify the chain switch succeeded
-          // Poll the wallet client to ensure the chain actually switched
-          let switchConfirmed = false;
-          for (let i = 0; i < 10; i++) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Check both Dynamic wallet chain and wagmi wallet client chain
-            const newDynamicChain = primaryWallet?.chain 
-              ? (typeof primaryWallet.chain === 'number' 
-                ? primaryWallet.chain 
-                : parseInt(primaryWallet.chain.toString(), 10))
-              : null;
-            const newWagmiChain = walletClient?.chain?.id;
-            
-            console.log(`⏳ Waiting for chain switch... Attempt ${i + 1}/10 - Dynamic: ${newDynamicChain}, Wagmi: ${newWagmiChain}, Need: ${sourceChainId}`);
-            
-            if (newDynamicChain === sourceChainId || newWagmiChain === sourceChainId) {
-              switchConfirmed = true;
-              console.log(`✅ Chain switch confirmed!`);
-              break;
-            }
-          }
-          
-          if (!switchConfirmed) {
-            throw new Error(`Chain switch timeout. Please ensure you're on ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"} and try again.`);
-          }
-          
-          // Final wait to ensure everything is synced
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          console.log(`✅ Successfully switched to chain ${sourceChainId}`);
-        } catch (switchError: any) {
-          console.error("Chain switch error:", switchError);
-          throw new Error(`Failed to switch to ${sourceChain}: ${switchError.message || switchError}. Please switch to ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"} manually and try again.`);
-        }
-      } else {
-        console.log(`✅ Already on source chain: ${sourceChainId}`);
       }
 
       setStatus("approving");
