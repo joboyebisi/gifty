@@ -511,12 +511,14 @@ app.post("/api/gifts/:id/claim", async (req: any, res: any) => {
       const escrowManager = new EscrowManager();
 
       // Release funds from escrow to recipient
+      // Note: Escrow wallet is always on ETH-SEPOLIA (Circle doesn't support Arc for developer wallets)
+      // CCTP will bridge from Sepolia to destination chain
       const transfer = await escrowManager.releaseFromEscrow(
         dbGift.circle_wallet_id,
         walletAddress,
         dbGift.amount_usdc,
-        dbGift.src_chain || "ethereum",
-        dbGift.dst_chain || "arc"
+        "eth-sepolia", // Escrow is always on Sepolia
+        dbGift.dst_chain || "arc-testnet" // Destination chain (can be Arc or Sepolia)
       );
 
       // Update gift with transfer info
@@ -610,12 +612,14 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
       const escrowManager = new EscrowManager();
 
       // Release funds from escrow to recipient
+      // Note: Escrow wallet is always on ETH-SEPOLIA (Circle doesn't support Arc for developer wallets)
+      // CCTP will bridge from Sepolia to destination chain
       const transfer = await escrowManager.releaseFromEscrow(
         gift.circleWalletId!, // Escrow wallet (already funded)
         walletAddress, // Recipient's wallet
         gift.amountUsdc,
-        gift.srcChain || "ethereum",
-        gift.dstChain || "arc"
+        "eth-sepolia", // Escrow is always on Sepolia
+        gift.dstChain || "arc-testnet" // Destination chain (can be Arc or Sepolia)
       );
 
       console.log(`✅ Transfer initiated: ${transfer.transferId}`);
@@ -2064,12 +2068,14 @@ app.post("/api/bulk-gifts/:code/claim", async (req: any, res: any) => {
         if (gift) {
           // Execute claim
           const escrowManager = new EscrowManager();
+          // Note: Escrow wallet is always on ETH-SEPOLIA (Circle doesn't support Arc for developer wallets)
+          // CCTP will bridge from Sepolia to destination chain
           const transfer = await escrowManager.releaseFromEscrow(
             gift.circleWalletId!,
             walletAddress,
             gift.amountUsdc,
-            gift.srcChain || "ethereum",
-            gift.dstChain || "arc"
+            "eth-sepolia", // Escrow is always on Sepolia
+            gift.dstChain || "arc-testnet" // Destination chain (can be Arc or Sepolia)
           );
 
           // Mark gift as claimed

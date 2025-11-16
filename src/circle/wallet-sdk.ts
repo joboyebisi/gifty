@@ -109,7 +109,9 @@ export class CircleWalletSDKClient {
    * Create a developer-controlled wallet
    * Requires a wallet set to be created first
    */
-  async createWallet(blockchains: string[] = ["ETH-SEPOLIA", "ETH-ARC-TESTNET"]): Promise<CircleWallet> {
+  // Note: Only ETH-SEPOLIA is supported for developer wallets
+  // Arc Testnet is not supported yet - we'll use CCTP to bridge from Sepolia to Arc
+  async createWallet(blockchains: string[] = ["ETH-SEPOLIA"]): Promise<CircleWallet> {
     try {
       // Ensure wallet set exists
       const walletSetId = await this.getOrCreateWalletSet();

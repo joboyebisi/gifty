@@ -103,7 +103,7 @@ export class CircleWalletClient {
       const result = await this.request("POST", "/developer/wallets", {
         idempotencyKey: crypto.randomUUID(),
         entityId: this.entityId,
-        blockchains: ["ETH-SEPOLIA", "ETH-ARC-TESTNET"], // Required: specify which blockchains to support
+        blockchains: ["ETH-SEPOLIA"], // Only ETH-SEPOLIA is supported for developer wallets. Arc transfers use CCTP.
       });
       return result.data;
     } catch (error: any) {
