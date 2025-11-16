@@ -215,7 +215,7 @@ app.post("/api/ai/messages", async (req: any, res: any) => {
 // Gift creation endpoint with escrow
 app.post("/api/gifts/create", async (req: any, res: any) => {
   try {
-    const { senderUserId, recipientHandle, recipientEmail, recipientPhone, amountUsdc, srcChain, dstChain, message, expiresInDays, senderWalletAddress } = (req as any).body || {};
+    const { senderUserId, recipientHandle, recipientEmail, recipientPhone, amountUsdc, srcChain, dstChain, message, expiresInDays, senderWalletAddress, senderWalletType } = (req as any).body || {};
     if (!amountUsdc || parseFloat(amountUsdc) <= 0) {
       return res.status(400).json({ error: "Valid amountUsdc required" });
     }
@@ -225,14 +225,31 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
 
     console.log(`🎁 Creating gift: ${amountUsdc} USDC for ${recipientHandle || recipientEmail || recipientPhone || "recipient"}`);
 
+    // Check sender's balance before creating gift
+    // Sender wallet should be on Arc (primary or smart wallet)
+    const { getChainBalances } = await import("./blockchain/balance");
+    const senderBalances = await getChainBalances(senderWalletAddress, "5042002"); // Arc Testnet
+    const senderUSDCBalance = parseFloat(senderBalances.usdc.balanceFormatted || "0");
+    const requiredAmount = parseFloat(amountUsdc);
+    
+    if (senderUSDCBalance < requiredAmount) {
+      return res.status(400).json({ 
+        error: `Insufficient balance. Required: ${requiredAmount} USDC, Available: ${senderUSDCBalance.toFixed(2)} USDC on Arc Testnet`,
+        availableBalance: senderUSDCBalance,
+        requiredAmount: requiredAmount,
+      });
+    }
+
+    console.log(`✅ Balance check passed: ${senderUSDCBalance.toFixed(2)} USDC available on Arc`);
+
     // Create gift first
     const gift = await createGift({
       senderUserId,
       recipientHandle,
       recipientEmail,
       amountUsdc,
-      srcChain,
-      dstChain,
+      srcChain: srcChain || "arc-testnet", // Sender is on Arc
+      dstChain: dstChain || "arc-testnet", // Recipient receives on Arc
       message,
       expiresInDays: expiresInDays || 90,
       senderWalletAddress,
@@ -240,26 +257,30 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
 
     console.log(`✅ Gift created: ${gift.claimCode}`);
 
-    // Fund escrow: Create escrow wallet and lock funds
+    // Fund escrow: Create escrow wallet and transfer funds via CCTP
     // NOTE: Escrow wallet creation may fail if Circle API not configured
     // We'll handle this gracefully and allow gift creation without escrow for now
     try {
       const escrowManager = new EscrowManager();
       
-      // Create escrow wallet for this gift
-      console.log("Creating escrow wallet...");
+      // Create escrow wallet for this gift (on Sepolia - Circle requirement)
+      console.log("🔐 Creating escrow wallet (each gift gets its own secure escrow wallet)...");
       const escrowWallet = await escrowManager.createEscrowWallet();
       console.log(`✅ Escrow wallet created: ${escrowWallet.id}`);
+      if (escrowWallet.address) {
+        console.log(`✅ Escrow wallet address: ${escrowWallet.address}`);
+      }
       
-      // Fund escrow from sender
-      // Note: In production, this requires sender's wallet approval
-      // For now, we create the escrow wallet and mark it as ready
-      // The actual funding should happen via a separate approval flow
+      // Fund escrow from sender's wallet using CCTP
+      // Transfer from sender's Arc wallet to escrow Sepolia wallet via CCTP
+      // This ensures proper cross-chain settlement
+      console.log(`💸 Funding escrow via CCTP: ${amountUsdc} USDC from ${senderWalletAddress} (Arc) → escrow ${escrowWallet.id} (Sepolia)...`);
       const fundResult = await escrowManager.fundEscrow(
         escrowWallet.id,
         senderWalletAddress,
         amountUsdc,
-        srcChain || "ethereum"
+        "arc-testnet", // Sender wallet is on Arc
+        "eth-sepolia" // Escrow wallet is on Sepolia (Circle requirement)
       );
       
       const supabase = getSupabase();
@@ -285,12 +306,18 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
       });
 
       res.json({
-        gift: { ...gift, circleWalletId: escrowWallet.id, transferStatus: "escrow_funded" },
+        gift: { ...gift, circleWalletId: escrowWallet.id, transferStatus: fundResult.success ? "escrow_funded" : "escrow_pending" },
         claimUrl: links.webLink,
         telegramLink: links.telegramLink,
         universalLink: links.universalLink,
         escrowWalletId: escrowWallet.id,
-        message: "Gift created and funds escrowed. Recipient can claim when ready.",
+        escrowWalletAddress: escrowWallet.address,
+        fundingStatus: fundResult.success ? "funded" : "pending",
+        fundingError: fundResult.error,
+        transferId: fundResult.transferId,
+        message: fundResult.success 
+          ? `🎁 Gift created! ${amountUsdc} USDC transferred to escrow via CCTP. Each gift has its own secure escrow wallet. Recipient will receive funds on Arc Testnet when they claim.`
+          : "Gift created but escrow funding pending. Recipient can claim once funds are available.",
       });
     } catch (escrowError: any) {
       console.error("❌ Escrow funding error:", escrowError);

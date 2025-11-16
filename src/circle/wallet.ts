@@ -125,6 +125,22 @@ export class CircleWalletClient {
     }
   }
 
+  // Get wallet details (including address)
+  async getWalletDetails(walletId: string): Promise<{ id: string; address?: string; balances: any[] }> {
+    const result = await this.request("GET", `/developer/wallets/${walletId}`);
+    // Circle API returns wallet with addresses for each blockchain
+    const wallet = result.data;
+    // Extract address from wallet state or addresses array
+    const address = wallet.state?.addresses?.[0]?.address || 
+                    wallet.addresses?.[0]?.address || 
+                    wallet.address;
+    return {
+      id: wallet.id,
+      address,
+      balances: wallet.balances || [],
+    };
+  }
+
   // Get wallet balance
   async getWalletBalance(walletId: string): Promise<string> {
     const result = await this.request("GET", `/developer/wallets/${walletId}`);
@@ -150,6 +166,34 @@ export class CircleWalletClient {
         type: "blockchain",
         address: recipientAddress,
         chain,
+      },
+      amount: {
+        amount,
+        currency: "USDC",
+      },
+    });
+    return result.data;
+  }
+
+  // Transfer USDC from blockchain address (user wallet) to Circle wallet (escrow)
+  // This allows funding escrow from user's Dynamic wallet
+  async transferFromBlockchain(
+    senderAddress: string,
+    circleWalletId: string,
+    amount: string,
+    chain: string = "ETH-SEPOLIA"
+  ): Promise<CircleTransfer> {
+    const result = await this.request("POST", `/developer/transactions/transfer`, {
+      idempotencyKey: crypto.randomUUID(),
+      entityId: this.entityId,
+      source: {
+        type: "blockchain",
+        address: senderAddress,
+        chain,
+      },
+      destination: {
+        type: "wallet",
+        id: circleWalletId,
       },
       amount: {
         amount,

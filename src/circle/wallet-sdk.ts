@@ -147,6 +147,31 @@ export class CircleWalletSDKClient {
   }
 
   /**
+   * Get wallet details (including address)
+   */
+  async getWalletDetails(walletId: string): Promise<{ id: string; address?: string; balances: any[] }> {
+    try {
+      const walletData = await this.walletSDK.getWallets({ walletSetId: await this.getOrCreateWalletSet() });
+      const wallet = walletData.data?.wallets?.find((w: any) => w.id === walletId);
+      if (!wallet) {
+        throw new Error(`Wallet ${walletId} not found`);
+      }
+      // Extract address from wallet state
+      const address = wallet.state?.addresses?.[0]?.address || 
+                      wallet.addresses?.[0]?.address || 
+                      wallet.address;
+      return {
+        id: wallet.id,
+        address,
+        balances: wallet.balances || [],
+      };
+    } catch (error: any) {
+      console.error(`❌ [CIRCLE/SDK] Failed to get wallet details:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get wallet balance
    */
   async getWalletBalance(walletId: string): Promise<string> {
@@ -164,6 +189,60 @@ export class CircleWalletSDKClient {
       return usdcBalance?.amount || "0";
     } catch (error: any) {
       console.error(`❌ [CIRCLE/SDK] Failed to get wallet balance:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Transfer USDC from blockchain address (user wallet) to Circle wallet (escrow)
+   * This allows funding escrow from user's Dynamic wallet
+   */
+  async transferFromBlockchain(
+    senderAddress: string,
+    circleWalletId: string,
+    amount: string,
+    chain: string = "ETH-SEPOLIA"
+  ): Promise<{ id: string; status: string }> {
+    try {
+      const response = await fetch(`${this.getBaseUrl()}/developer/transactions/transfer`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          idempotencyKey: randomUUID(),
+          source: {
+            type: "blockchain",
+            address: senderAddress,
+            chain,
+          },
+          destination: {
+            type: "wallet",
+            id: circleWalletId,
+          },
+          amount: {
+            amount,
+            currency: "USDC",
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Transfer failed: ${response.status} ${error}`);
+      }
+
+      const result = await response.json() as { data: { id: string; status: string } };
+      if (!result.data || !result.data.id || !result.data.status) {
+        throw new Error("Invalid response from Circle API");
+      }
+      return {
+        id: result.data.id,
+        status: result.data.status,
+      };
+    } catch (error: any) {
+      console.error(`❌ [CIRCLE/SDK] Transfer from blockchain failed:`, error.message);
       throw error;
     }
   }

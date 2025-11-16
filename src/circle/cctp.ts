@@ -51,8 +51,9 @@ export class CCTPClient {
   }
 
   // Initiate CCTP cross-chain transfer
+  // Supports both wallet IDs (Circle wallets) and wallet addresses (user wallets)
   async initiateCCTPTransfer(
-    walletId: string,
+    sourceWallet: string, // Can be wallet ID or wallet address
     sourceChain: string,
     destinationChain: string,
     recipientAddress: string,
@@ -70,13 +71,23 @@ export class CCTPClient {
     const sourceChainId = chainMap[sourceChain.toLowerCase()] || sourceChain;
     const destChainId = chainMap[destinationChain.toLowerCase()] || destinationChain;
 
+    // Determine if source is a wallet ID (Circle wallet) or address (user wallet)
+    // Wallet IDs are typically UUIDs, addresses start with 0x
+    const isWalletId = !sourceWallet.startsWith("0x");
+    
     const result = await this.request("POST", `/developer/transactions/transfer`, {
       idempotencyKey: crypto.randomUUID(),
       entityId: this.entityId,
-      source: {
-        type: "wallet",
-        id: walletId,
-      },
+      source: isWalletId
+        ? {
+            type: "wallet",
+            id: sourceWallet,
+          }
+        : {
+            type: "blockchain",
+            address: sourceWallet,
+            chain: sourceChainId,
+          },
       destination: {
         type: "blockchain",
         address: recipientAddress,
