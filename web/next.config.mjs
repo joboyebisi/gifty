@@ -15,10 +15,7 @@ const nextConfig = {
   // Disable file tracing for problematic paths (moved from experimental)
   outputFileTracingExcludes: {
     '*': [
-      '**/node_modules/**',
-      '**/.next/**',
       'C:/Users/Deborah/**',
-      '**/next/dist/compiled/source-map/**',
     ],
   },
   webpack: (config, { isServer, webpack }) => {
@@ -30,11 +27,9 @@ const nextConfig = {
     };
     
     // Ignore the private-next-instrumentation-client module (internal Next.js module)
-    // Also handle source-map on client side
     config.resolve.alias = {
       ...config.resolve.alias,
       'private-next-instrumentation-client': false,
-      'next/dist/compiled/source-map': path.resolve(__dirname, 'webpack-source-map-shim.js'),
     };
     
     // Prevent resolving files outside project root
@@ -60,25 +55,6 @@ const nextConfig = {
         resourceRegExp: /^pino-pretty$/,
       })
     );
-    
-    // CRITICAL FIX: Handle source-map module issue
-    // Try multiple approaches to prevent Next.js from crashing
-    if (isServer) {
-      // Approach 1: Replace with shim
-      config.plugins.push(
-        new webpack.NormalModuleReplacementPlugin(
-          /^next\/dist\/compiled\/source-map$/,
-          path.resolve(__dirname, 'webpack-source-map-shim.js')
-        )
-      );
-      
-      // Approach 2: Also ignore as fallback
-      config.plugins.push(
-        new webpack.IgnorePlugin({
-          resourceRegExp: /^next\/dist\/compiled\/source-map$/,
-        })
-      );
-    }
     
     return config;
   },

@@ -10,9 +10,10 @@ import {
   walletClientToLocalAccount,
 } from "@circle-fin/modular-wallets-core";
 import { createPublicClient, http } from "viem";
+import type { Chain } from "viem";
 import { createBundlerClient } from "viem/account-abstraction";
 import type { SmartAccount } from "viem/account-abstraction";
-import { arcTestnet } from "../config/chains";
+import { arcTestnet, sepoliaTestnet } from "../config/chains";
 
 /**
  * Create Circle Smart Account from Dynamic wallet
@@ -43,32 +44,26 @@ export async function createCircleSmartAccountFromDynamic(
     );
   }
 
-  // Use Arc network
-  const networkName = "arc";
-  const chainId = arcTestnet.id;
+  const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "arc").toLowerCase();
+  const networkPath =
+    process.env.NEXT_PUBLIC_CIRCLE_NETWORK_PATH ||
+    (rawNetwork === "arc-testnet" ? "arc" : rawNetwork);
+
+  const normalizedClientUrl = clientUrl.replace(/\/$/, "");
+
+  let chain: Chain = arcTestnet;
+  if (rawNetwork.includes("sepolia")) {
+    chain = sepoliaTestnet;
+  }
+
+  const transportUrl = `${normalizedClientUrl}/${networkPath}`;
 
   // Create Circle modular transport
-  const modularTransport = toModularTransport(
-    `${clientUrl}/${networkName}`,
-    clientKey
-  );
+  const modularTransport = toModularTransport(transportUrl, clientKey);
 
   // Create public client with Circle transport
   const publicClient = createPublicClient({
-    chain: {
-      id: chainId,
-      name: "Arc",
-      nativeCurrency: {
-        name: "USDC",
-        symbol: "USDC",
-        decimals: 18,
-      },
-      rpcUrls: {
-        default: {
-          http: [arcTestnet.rpcUrls.default.http[0]],
-        },
-      },
-    },
+    chain,
     transport: modularTransport,
   });
 
