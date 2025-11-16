@@ -129,55 +129,129 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
 
     try {
       // Create adapter from wallet client
-      // BridgeKit needs a provider that supports eth_requestAccounts
-      // For Dynamic wallets, we need to use window.ethereum (the actual wallet provider)
-      // NOT the transport which points to RPC endpoints
+      // According to BridgeKit docs, for browser/wallet provider support:
+      // Use createAdapterFromProvider with window.ethereum OR
+      // Use createAdapterFromPrivateKey with provider parameter
       setStatusMessage("Creating adapter...");
       
-      let provider: any = null;
+      let adapter: any = null;
       
-      // Priority 1: Use window.ethereum (the actual wallet provider)
+      // Priority 1: Use window.ethereum directly (the actual wallet provider)
       // This is what BridgeKit needs - a provider that can handle account requests
       if (typeof window !== 'undefined' && (window as any).ethereum) {
-        provider = (window as any).ethereum;
-        console.log("✅ Using window.ethereum provider");
-      } else {
-        // Fallback: Try to create a provider wrapper from the wallet client
-        // This is less ideal but may work for some wallet types
-        if (client) {
-          // Create a provider-like object that wraps the wallet client
-          provider = {
-            request: async (args: { method: string; params?: any[] }) => {
-              // For account requests, return the wallet address
-              if (args.method === 'eth_requestAccounts' || args.method === 'eth_accounts') {
-                const address = sourceWallet === "primary" ? primaryWalletAddress : (smartAccountAddress || "");
-                return address ? [address] : [];
+        try {
+          const ethereum = (window as any).ethereum;
+          
+          // First, check if we already have accounts (non-blocking)
+          // This avoids triggering a new permission request if one is already pending
+          let accounts: string[] = [];
+          try {
+            accounts = await ethereum.request({ method: 'eth_accounts' });
+          } catch (err) {
+            console.log("eth_accounts check failed:", err);
+          }
+          
+          // If we don't have accounts, try to request them
+          // But handle the "already pending" error gracefully
+          if (!accounts || accounts.length === 0) {
+            try {
+              accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+            } catch (permError: any) {
+              // If there's already a pending request, wait and retry once
+              if (permError.message?.includes('already pending') || permError.code === -32002) {
+                console.log("⏳ Permission request already pending, waiting 3 seconds...");
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                // Retry once
+                try {
+                  accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+                } catch (retryError: any) {
+                  throw new Error("Please approve the wallet connection request in MetaMask and try again.");
+                }
+              } else {
+                throw permError;
               }
-              // For other requests, use the client's request method if available
-              if (typeof (client as any).request === 'function') {
-                return (client as any).request(args);
-              }
-              // Fallback to transport if available
-              if ((client as any).transport && typeof (client as any).transport.request === 'function') {
-                return (client as any).transport.request(args);
-              }
-              throw new Error(`Method ${args.method} not supported`);
-            },
-            // Add other EIP-1193 provider methods if needed
-            on: () => {},
-            removeListener: () => {},
-          };
-          console.log("⚠️ Using fallback provider wrapper");
+            }
+          }
+          
+          if (!accounts || accounts.length === 0) {
+            throw new Error("No wallet accounts available. Please connect your wallet.");
+          }
+          
+          console.log("✅ Wallet connected:", accounts[0]);
+          
+          // Now create the adapter - it should use the already-connected account
+          adapter = await createAdapterFromProvider({
+            provider: ethereum,
+          });
+          console.log("✅ Created adapter from window.ethereum");
+        } catch (adapterError: any) {
+          console.error("Failed to create adapter from window.ethereum:", adapterError);
+          // Fall through to alternative method
         }
       }
       
-      if (!provider) {
-        throw new Error("Unable to get provider from wallet. Please ensure your wallet is connected and supports EIP-1193.");
+      // Fallback: Create a provider wrapper that handles account requests properly
+      if (!adapter && client) {
+        // Create a provider-like object that wraps the wallet client
+        // This handles eth_requestAccounts by returning the wallet address directly
+        const providerWrapper = {
+          request: async (args: { method: string; params?: any[] }) => {
+            // For account requests, return the wallet address directly
+            // This avoids calling eth_requestAccounts on RPC endpoints
+            if (args.method === 'eth_requestAccounts' || args.method === 'eth_accounts') {
+              const address = sourceWallet === "primary" ? primaryWalletAddress : (smartAccountAddress || "");
+              if (!address) {
+                throw new Error("Wallet address not available");
+              }
+              return [address];
+            }
+            
+            // For chain switching, handle it through the wallet client
+            if (args.method === 'wallet_switchEthereumChain') {
+              // Let the wallet handle chain switching
+              if (typeof (client as any).request === 'function') {
+                return (client as any).request(args);
+              }
+              // If client doesn't support it, try window.ethereum
+              if (typeof window !== 'undefined' && (window as any).ethereum) {
+                return (window as any).ethereum.request(args);
+              }
+              throw new Error("Chain switching not supported");
+            }
+            
+            // For other requests, use the client's request method if available
+            if (typeof (client as any).request === 'function') {
+              return (client as any).request(args);
+            }
+            
+            // Fallback to transport if available
+            if ((client as any).transport && typeof (client as any).transport.request === 'function') {
+              return (client as any).transport.request(args);
+            }
+            
+            throw new Error(`Method ${args.method} not supported`);
+          },
+          // Add other EIP-1193 provider methods
+          on: () => {},
+          removeListener: () => {},
+          isMetaMask: (window as any).ethereum?.isMetaMask || false,
+          isCoinbaseWallet: (window as any).ethereum?.isCoinbaseWallet || false,
+        };
+        
+        try {
+          adapter = await createAdapterFromProvider({
+            provider: providerWrapper as any,
+          });
+          console.log("✅ Created adapter from provider wrapper");
+        } catch (adapterError: any) {
+          console.error("Failed to create adapter from provider wrapper:", adapterError);
+          throw new Error(`Failed to create adapter: ${adapterError.message}`);
+        }
       }
       
-      const adapter = await createAdapterFromProvider({
-        provider: provider,
-      });
+      if (!adapter) {
+        throw new Error("Unable to create adapter. Please ensure your wallet is connected and supports EIP-1193.");
+      }
 
       // Initialize BridgeKit (no config needed - uses default CCTPv2 provider)
       const kit = new BridgeKit();
