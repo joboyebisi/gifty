@@ -5,6 +5,7 @@ import { useTelegram } from "../../hooks/useTelegram";
 import { WalletBalance } from "../../components/WalletBalance";
 import { DualWalletDisplay } from "../../components/DualWalletDisplay";
 import { CircleSmartAccountVerification } from "../../components/CircleSmartAccountVerification";
+import { CCTPBridge } from "../../components/CCTPBridge";
 import Link from "next/link";
 
 interface BalanceData {
@@ -23,10 +24,13 @@ export default function WalletPage() {
   const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const { isTelegram, user: tgUser } = useTelegram();
   const [balances, setBalances] = useState<BalanceData | null>(null);
+  const [smartAccountBalances, setSmartAccountBalances] = useState<BalanceData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingSmartAccount, setLoadingSmartAccount] = useState(false);
   const [copied, setCopied] = useState(false);
   const [circleWalletId, setCircleWalletId] = useState<string | null>(null);
   const [creatingCircleWallet, setCreatingCircleWallet] = useState(false);
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -76,33 +80,104 @@ export default function WalletPage() {
     }
   };
 
+  // Manual refresh function for primary wallet (no automatic refresh)
+  const fetchBalances = async () => {
+    if (!primaryWallet?.address) return;
+    
+    setLoading(true);
+    try {
+      console.log(`💰 Fetching balances for primary wallet: ${primaryWallet.address}`);
+      const res = await fetch(`${API}/api/wallet/balance?walletAddress=${primaryWallet.address}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      console.log("✅ Primary wallet balances:", data);
+      setBalances(data);
+    } catch (err: any) {
+      console.error("❌ Error fetching primary wallet balances:", err);
+      setBalances({ error: err.message || "Failed to load balances" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Get Circle Smart Account address from verification component or try to create it
+  useEffect(() => {
+    if (!primaryWallet?.address || smartAccountAddress) return;
+
+    async function getSmartAccountAddress() {
+      try {
+        const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
+        if (!clientKey) return;
+
+        // Wait a bit for Dynamic wallet to initialize
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const dynamicWalletClient = await (primaryWallet as any).getWalletClient?.();
+        if (!dynamicWalletClient) {
+          console.log("⏳ Wallet page: Waiting for wallet client...");
+          return;
+        }
+
+        const { createCircleSmartAccountFromDynamic } = await import("../../lib/circle-smart-account");
+        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
+        setSmartAccountAddress(smartAccount.address);
+        console.log("✅ Wallet page: Circle Smart Account address loaded:", smartAccount.address);
+      } catch (err: any) {
+        console.error("❌ Wallet page: Error getting Circle Smart Account address:", err);
+      }
+    }
+
+    getSmartAccountAddress();
+  }, [primaryWallet?.address, smartAccountAddress]);
+
+  // Fetch Circle Smart Account balances
+  const fetchSmartAccountBalances = async () => {
+    if (!smartAccountAddress) {
+      console.log("⏳ Wallet page: Smart account address not ready yet");
+      return;
+    }
+    
+    setLoadingSmartAccount(true);
+    try {
+      console.log(`💰 Fetching balances for Circle Smart Account: ${smartAccountAddress}`);
+      const res = await fetch(`${API}/api/wallet/balance?walletAddress=${smartAccountAddress}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      console.log("✅ Circle Smart Account balances:", data);
+      setSmartAccountBalances(data);
+    } catch (err: any) {
+      console.error("❌ Error fetching Circle Smart Account balances:", err);
+      setSmartAccountBalances({ error: err.message || "Failed to load balances" });
+    } finally {
+      setLoadingSmartAccount(false);
+    }
+  };
+
+  // Auto-fetch smart account balances when address is available
+  useEffect(() => {
+    if (smartAccountAddress && !smartAccountBalances && !loadingSmartAccount) {
+      fetchSmartAccountBalances();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [smartAccountAddress]);
+
+  // Combined refresh function
+  const refreshAllBalances = async () => {
+    await Promise.all([fetchBalances(), fetchSmartAccountBalances()]);
+  };
+
+  // Initial load only (no automatic refresh)
   useEffect(() => {
     if (!primaryWallet?.address) {
       setBalances(null);
       return;
     }
-
-    async function fetchBalances() {
-      if (!primaryWallet?.address) return;
-      
-      setLoading(true);
-      try {
-        const res = await fetch(`${API}/api/wallet/balance?walletAddress=${primaryWallet.address}`);
-        const data = await res.json();
-        setBalances(data);
-      } catch (err) {
-        console.error("Error fetching balances:", err);
-        setBalances({ error: "Failed to load balances" });
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchBalances();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchBalances, 30000);
-    return () => clearInterval(interval);
-  }, [primaryWallet?.address, API]);
+  }, [primaryWallet?.address]);
 
   function copyAddress() {
     if (primaryWallet?.address) {
@@ -189,66 +264,150 @@ export default function WalletPage() {
         <DualWalletDisplay />
       </div>
 
-      {/* Legacy Balance Display (for backward compatibility) */}
+      {/* Quick Balance Check - Shows both Primary and Circle Smart Account */}
       <div className="tg-card p-4 mb-4">
-        <h3 className="text-lg font-semibold mb-3">💰 Quick Balance Check</h3>
-        {loading && !balances ? (
-          <div className="animate-pulse space-y-2">
-            <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">💰 Quick Balance Check</h3>
+          <button
+            onClick={refreshAllBalances}
+            className="text-xs px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded disabled:opacity-50"
+            disabled={loading || loadingSmartAccount}
+          >
+            {(loading || loadingSmartAccount) ? "⏳ Refreshing..." : "🔄 Refresh"}
+          </button>
+        </div>
+        
+        {/* Primary Wallet (Dynamic) Balances */}
+        <div className="mb-4 pb-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            <div className="font-semibold text-sm text-gray-700">Primary Wallet (Dynamic)</div>
           </div>
-        ) : balances?.error ? (
-          <div className="text-xs text-red-600">⚠️ {balances.error}</div>
-        ) : (
-          <div className="space-y-3">
-            {balances?.sepolia && (
-              <div className="space-y-2 pb-3 border-b border-gray-200">
-                <div className="font-semibold text-sm text-gray-700">Ethereum Sepolia</div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">ETH:</span>
-                  <span className="font-mono font-semibold">
-                    {balances.sepolia.eth.balanceFormatted || "0.00"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">USDC:</span>
-                  <span className="font-mono font-semibold text-green-600">
-                    {balances.sepolia.usdc.balanceFormatted || "0.00"}
-                  </span>
-                </div>
-              </div>
-            )}
-            {balances?.arc && (
-              <div className="space-y-2">
-                <div className="font-semibold text-sm text-gray-700">Arc Testnet</div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">USDC:</span>
-                  <span className="font-mono font-semibold text-green-600">
-                    {balances.arc.usdc.balanceFormatted || "0.00"}
-                  </span>
-                </div>
-              </div>
-            )}
-            {!balances?.sepolia && !balances?.arc && (
-              <div className="text-xs text-gray-500">No balances found</div>
-            )}
+          <div className="text-xs text-gray-500 mb-2 font-mono break-all">
+            {primaryWallet.address}
           </div>
-        )}
-        <button
-          onClick={() => {
-            if (primaryWallet?.address) {
-              const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-              fetch(`${API}/api/wallet/balance?walletAddress=${primaryWallet.address}`)
-                .then((res) => res.json())
-                .then((data) => setBalances(data))
-                .catch((err) => console.error("Error refreshing:", err));
-            }
-          }}
-          className="tg-button-secondary w-full text-sm mt-3"
-          disabled={loading}
-        >
-          {loading ? "Refreshing..." : "🔄 Refresh Balances"}
-        </button>
+          {loading && !balances ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ) : balances?.error ? (
+            <div className="text-xs text-red-600">⚠️ {balances.error}</div>
+          ) : (
+            <div className="space-y-2">
+              {balances?.sepolia && (
+                <div className="space-y-1">
+                  <div className="font-semibold text-xs text-gray-600">Ethereum Sepolia</div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">ETH:</span>
+                    <span className="font-mono font-semibold">
+                      {balances.sepolia.eth?.balanceFormatted || "0.00"}
+                      {balances.sepolia.eth?.error && (
+                        <span className="text-red-500 ml-1">⚠️</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">USDC:</span>
+                    <span className="font-mono font-semibold text-green-600">
+                      {balances.sepolia.usdc?.balanceFormatted || "0.00"}
+                      {balances.sepolia.usdc?.error && (
+                        <span className="text-red-500 ml-1">⚠️</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {balances?.arc && (
+                <div className="space-y-1 mt-2">
+                  <div className="font-semibold text-xs text-gray-600">Arc Testnet</div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">USDC:</span>
+                    <span className="font-mono font-semibold text-green-600">
+                      {balances.arc.usdc?.balanceFormatted || "0.00"}
+                      {balances.arc.usdc?.error && (
+                        <span className="text-red-500 ml-1">⚠️</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
+              {!balances?.sepolia && !balances?.arc && !balances?.error && (
+                <div className="text-xs text-gray-500">No balances found</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Circle Smart Account Balances */}
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+            <div className="font-semibold text-sm text-gray-700">Circle Smart Account</div>
+          </div>
+          {!smartAccountAddress ? (
+            <div className="text-xs text-gray-500 mb-2">
+              Circle Smart Account not loaded yet. Check "Your Wallets" section above.
+            </div>
+          ) : (
+            <>
+              <div className="text-xs text-gray-500 mb-2 font-mono break-all">
+                {smartAccountAddress}
+              </div>
+              {loadingSmartAccount && !smartAccountBalances ? (
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              ) : smartAccountBalances?.error ? (
+                <div className="text-xs text-red-600">⚠️ {smartAccountBalances.error}</div>
+              ) : (
+                <div className="space-y-2">
+                  {smartAccountBalances?.sepolia && (
+                    <div className="space-y-1">
+                      <div className="font-semibold text-xs text-gray-600">Ethereum Sepolia</div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-600">ETH:</span>
+                        <span className="font-mono font-semibold">
+                          {smartAccountBalances.sepolia.eth?.balanceFormatted || "0.00"}
+                          {smartAccountBalances.sepolia.eth?.error && (
+                            <span className="text-red-500 ml-1">⚠️</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-600">USDC:</span>
+                        <span className="font-mono font-semibold text-green-600">
+                          {smartAccountBalances.sepolia.usdc?.balanceFormatted || "0.00"}
+                          {smartAccountBalances.sepolia.usdc?.error && (
+                            <span className="text-red-500 ml-1">⚠️</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {smartAccountBalances?.arc && (
+                    <div className="space-y-1 mt-2">
+                      <div className="font-semibold text-xs text-gray-600">Arc Testnet</div>
+                      <div className="flex justify-between text-xs">
+                        <span className="text-gray-600">USDC:</span>
+                        <span className="font-mono font-semibold text-green-600">
+                          {smartAccountBalances.arc.usdc?.balanceFormatted || "0.00"}
+                          {smartAccountBalances.arc.usdc?.error && (
+                            <span className="text-red-500 ml-1">⚠️</span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {!smartAccountBalances?.sepolia && !smartAccountBalances?.arc && !smartAccountBalances?.error && (
+                    <div className="text-xs text-gray-500">No balances found</div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
              {/* Circle Integration Info */}
@@ -263,6 +422,18 @@ export default function WalletPage() {
                  </div>
                </div>
              </div>
+
+      {/* CCTP Bridge */}
+      <div className="mb-4">
+        <CCTPBridge
+          primaryWalletAddress={primaryWallet.address}
+          smartAccountAddress={smartAccountAddress}
+          onTransferComplete={() => {
+            // Refresh balances after transfer
+            refreshAllBalances();
+          }}
+        />
+      </div>
 
       {/* Actions */}
       <div className="space-y-2 mb-4">

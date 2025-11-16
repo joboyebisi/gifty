@@ -9,7 +9,10 @@
     "build": "tsc -p tsconfig.json",
     "web": "cd web && npm i && npm run dev",
     "bot": "tsx scripts/telegram-bot.ts",
-    "bot:dev": "tsx watch scripts/telegram-bot.ts"
+    "bot:dev": "tsx watch scripts/telegram-bot.ts",
+    "deploy": "node scripts/deploy.js",
+    "deploy:win": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
+    "deploy:unix": "bash scripts/deploy.sh"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.1.0",

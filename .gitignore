@@ -67,6 +67,10 @@ yarn.lock
 # Development scripts (keep locally, not in repo)
 *.ps1
 *.sh
+# But keep deployment scripts
+!scripts/deploy.sh
+!scripts/deploy.ps1
+!scripts/deploy.js
 
 # Environment variable files and configs (sensitive)
 *.txt

@@ -1,8 +1,32 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useWalletClient } from "wagmi";
-import { getCircleSmartAccountAddress } from "../lib/circle-smart-account";
+import { createCircleSmartAccountFromDynamic } from "../lib/circle-smart-account";
+
+// Copy button component
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors"
+      title="Copy address"
+    >
+      {copied ? "✓ Copied" : "Copy"}
+    </button>
+  );
+}
 
 interface BalanceData {
   sepolia?: {
@@ -21,7 +45,6 @@ interface BalanceData {
  */
 export function DualWalletDisplay() {
   const { primaryWallet } = useDynamicContext();
-  const { data: walletClient } = useWalletClient();
   const [smartAccountAddress, setSmartAccountAddress] = useState<`0x${string}` | null>(null);
   const [dynamicBalances, setDynamicBalances] = useState<BalanceData | null>(null);
   const [smartAccountBalances, setSmartAccountBalances] = useState<BalanceData | null>(null);
@@ -30,30 +53,69 @@ export function DualWalletDisplay() {
 
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
-  // Load Circle Smart Account address
+  // Load Circle Smart Account address - using same method as CircleSmartAccountVerification
   useEffect(() => {
-    if (!primaryWallet?.address || !walletClient) {
+    if (!primaryWallet?.address) {
       setSmartAccountAddress(null);
       return;
     }
 
+    // Wait a bit for Dynamic wallet to fully initialize
+    let timeoutId: NodeJS.Timeout;
+
     async function loadSmartAccount() {
+      const wallet = primaryWallet;
+      if (!wallet) {
+        setError("Dynamic wallet not connected");
+        return;
+      }
+
       try {
         const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
         if (!clientKey) {
           setError("Circle Client Key not configured");
           return;
         }
-        const address = await getCircleSmartAccountAddress(walletClient);
+
+        // Use the same method as CircleSmartAccountVerification
+        // Get wallet client directly from Dynamic connector (same as verification component)
+        const dynamicWalletClient = await (wallet as any).getWalletClient?.();
+
+        if (!dynamicWalletClient) {
+          setError("Wallet client not ready");
+          console.log("⏳ DualWalletDisplay: Waiting for wallet client...");
+          return;
+        }
+
+        console.log("🔍 DualWalletDisplay: Creating Circle Smart Account...", {
+          hasWalletClient: !!dynamicWalletClient,
+          hasAddress: !!wallet.address,
+          address: wallet.address?.slice(0, 10) + "...",
+        });
+
+        // Create Circle Smart Account (same as verification component)
+        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
+        const address = smartAccount.address;
+
         setSmartAccountAddress(address);
+        setError(null); // Clear any previous errors
+        console.log("✅ DualWalletDisplay: Circle Smart Account loaded:", address);
       } catch (err: any) {
-        console.error("Error loading Circle Smart Account:", err);
+        console.error("❌ DualWalletDisplay: Error loading Circle Smart Account:", err);
         setError(err.message || "Failed to load Circle Smart Account");
       }
     }
 
-    loadSmartAccount();
-  }, [primaryWallet?.address, walletClient]);
+    // Wait 2 seconds for Dynamic wallet to initialize, then load
+    // Use same timing as CircleSmartAccountVerification component
+    timeoutId = setTimeout(() => {
+      loadSmartAccount();
+    }, 2000);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [primaryWallet?.address]);
 
   // Fetch balances for Dynamic wallet (primary)
   useEffect(() => {
@@ -203,8 +265,11 @@ export function DualWalletDisplay() {
                 GASLESS
               </div>
             </div>
-            <div className="font-mono text-xs text-blue-800 break-all mb-2">
-              {smartAccountAddress}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="font-mono text-xs text-blue-800 break-all flex-1">
+                {smartAccountAddress}
+              </div>
+              <CopyButton text={smartAccountAddress} />
             </div>
             <div className="text-xs text-blue-700 mb-3">
               <strong>Use:</strong> Gasless transactions, account abstraction, sponsored fees
