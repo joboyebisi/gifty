@@ -11,9 +11,10 @@ import {
 } from "@circle-fin/modular-wallets-core";
 import { createPublicClient, http } from "viem";
 import type { Chain } from "viem";
+import { polygonAmoy } from "viem/chains";
 import { createBundlerClient } from "viem/account-abstraction";
 import type { SmartAccount } from "viem/account-abstraction";
-import { arcTestnet, sepoliaTestnet } from "../config/chains";
+import { sepoliaTestnet } from "../config/chains";
 
 /**
  * Create Circle Smart Account from Dynamic wallet
@@ -44,14 +45,19 @@ export async function createCircleSmartAccountFromDynamic(
     );
   }
 
-  const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "arc-testnet").toLowerCase();
-  const networkPath =
-    process.env.NEXT_PUBLIC_CIRCLE_NETWORK_PATH ||
-    (rawNetwork === "arc" ? "arc-testnet" : rawNetwork);
+  // Circle Modular Wallets supports: polygonAmoy, sepolia, baseSepolia, etc.
+  // Arc is NOT supported by Circle Modular Wallets yet
+  // Default to polygonAmoy for demo (Circle's recommended testnet)
+  const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "polygonAmoy").toLowerCase();
+  const networkPath = process.env.NEXT_PUBLIC_CIRCLE_NETWORK_PATH || 
+    (rawNetwork === "polygonamoy" ? "polygonAmoy" : 
+     rawNetwork === "sepolia" ? "sepolia" : 
+     rawNetwork);
 
   const normalizedClientUrl = clientUrl.replace(/\/$/, "");
 
-  let chain: Chain = arcTestnet;
+  // Use Polygon Amoy as default (Circle's supported network)
+  let chain: Chain = polygonAmoy;
   if (rawNetwork.includes("sepolia")) {
     chain = sepoliaTestnet;
   }
