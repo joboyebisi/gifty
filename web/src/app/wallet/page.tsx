@@ -3,9 +3,8 @@ import { useEffect, useState } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTelegram } from "../../hooks/useTelegram";
 import { WalletBalance } from "../../components/WalletBalance";
-import { CircleSmartWallet } from "../../components/CircleSmartWallet";
-import { CircleSmartAccountVerification } from "../../components/CircleSmartAccountVerification";
 import { DualWalletDisplay } from "../../components/DualWalletDisplay";
+import { CircleSmartAccountVerification } from "../../components/CircleSmartAccountVerification";
 import Link from "next/link";
 
 interface BalanceData {
@@ -136,10 +135,9 @@ export default function WalletPage() {
     <div className="tg-viewport max-w-md mx-auto px-4 py-8">
       <h2 className="text-2xl font-bold mb-4 text-center">💼 Manage Wallet</h2>
 
-      {/* Circle Smart Account */}
-      <div className="mb-4">
-        <CircleSmartWallet />
-      </div>
+      {/* Note: Circle Smart Accounts (Modular Wallets) don't support Arc network
+          We use Dynamic wallets (user-controlled) + Developer-Controlled Wallets (escrow) instead
+          Both support Arc network perfectly */}
 
       {/* Wallet Address */}
       <div className="tg-card p-4 mb-4">
@@ -178,6 +176,11 @@ export default function WalletPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Circle Smart Account Verification */}
+      <div className="mb-4">
+        <CircleSmartAccountVerification />
       </div>
 
       {/* Dual Wallet Display with Balances */}
@@ -248,18 +251,15 @@ export default function WalletPage() {
         </button>
       </div>
 
-             {/* Circle Smart Account Verification */}
-             <CircleSmartAccountVerification />
-
-             {/* Circle Smart Account Info */}
+             {/* Circle Integration Info */}
              <div className="tg-card p-3 mb-4 bg-blue-50 border border-blue-200">
                <div className="text-xs text-blue-800">
                  <strong>💡 About Circle Integration</strong>
                  <div className="text-xs text-blue-600 mt-1">
-                   • Your Dynamic wallet can receive funds directly<br/>
-                   • Circle Smart Accounts enable gasless transactions (optional)<br/>
+                   • Your Dynamic wallet works directly on Arc network<br/>
+                   • Developer-Controlled Wallets handle escrow (backend)<br/>
                    • Circle onramp works with any wallet address<br/>
-                   • No Circle developer wallet needed for fiat funding
+                   • All transactions settle on Arc network as required
                  </div>
                </div>
              </div>

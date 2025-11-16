@@ -2,6 +2,13 @@
  * Circle Smart Account Integration with Dynamic
  * Enables embedded wallets, gasless transactions, and account abstraction
  * Based on: https://developers.circle.com/w3s/modular-wallets-integ-dynamic
+ * 
+ * IMPORTANT: This file ONLY handles Circle Smart Account creation.
+ * Polygon Amoy is used ONLY for Circle Smart Account creation (Circle's supported network).
+ * 
+ * Main transactions use Arc network (configured in providers.tsx).
+ * Dynamic wallet works on Arc network for all main transactions.
+ * Circle Smart Account is a secondary wallet for gasless transactions on Polygon Amoy.
  */
 
 import {
@@ -9,10 +16,10 @@ import {
   toModularTransport,
   walletClientToLocalAccount,
 } from "@circle-fin/modular-wallets-core";
-import { createPublicClient, http } from "viem";
+import { createPublicClient } from "viem";
 import type { Chain } from "viem";
 import { polygonAmoy } from "viem/chains";
-import { createBundlerClient } from "viem/account-abstraction";
+// import { createBundlerClient } from "viem/account-abstraction"; // For future gasless transactions
 import type { SmartAccount } from "viem/account-abstraction";
 import { sepoliaTestnet } from "../config/chains";
 
@@ -26,8 +33,9 @@ export async function createCircleSmartAccountFromDynamic(
   const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
   // IMPORTANT: Get the exact Client URL from Circle Console → Modular Wallets → Configurator
   // Example: https://modular-sdk.circle.com/v1/rpc/w3s/buidl
-  // The code will append the network name (e.g., /arc) to create the full URL
-  // Final URL will be: https://modular-sdk.circle.com/v1/rpc/w3s/buidl/arc
+  // The code will append the network name (e.g., /polygonAmoy) to create the full URL
+  // Final URL will be: https://modular-sdk.circle.com/v1/rpc/w3s/buidl/polygonAmoy
+  // NOTE: This is ONLY for Circle Smart Account creation, NOT for main transactions (which use Arc)
   const clientUrl = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_URL || "https://modular-sdk.circle.com/v1/rpc/w3s/buidl";
 
   if (!clientKey) {
@@ -45,9 +53,14 @@ export async function createCircleSmartAccountFromDynamic(
     );
   }
 
+  // IMPORTANT: Polygon Amoy is ONLY used for Circle Smart Account creation
+  // This does NOT affect the main transaction network (Arc)
+  // 
   // Circle Modular Wallets supports: polygonAmoy, sepolia, baseSepolia, etc.
   // Arc is NOT supported by Circle Modular Wallets yet
-  // Default to polygonAmoy for demo (Circle's recommended testnet)
+  // 
+  // Main transactions use Arc network (configured in providers.tsx)
+  // Circle Smart Account is a secondary wallet for gasless transactions on Polygon Amoy
   const rawNetwork = (process.env.NEXT_PUBLIC_CIRCLE_NETWORK || "polygonAmoy").toLowerCase();
   const networkPath = process.env.NEXT_PUBLIC_CIRCLE_NETWORK_PATH || 
     (rawNetwork === "polygonamoy" ? "polygonAmoy" : 
@@ -56,7 +69,8 @@ export async function createCircleSmartAccountFromDynamic(
 
   const normalizedClientUrl = clientUrl.replace(/\/$/, "");
 
-  // Use Polygon Amoy as default (Circle's supported network)
+  // Use Polygon Amoy ONLY for Circle Smart Account creation (Circle's supported network)
+  // This chain is ONLY used for the Circle Smart Account, NOT for main transactions
   let chain: Chain = polygonAmoy;
   if (rawNetwork.includes("sepolia")) {
     chain = sepoliaTestnet;
@@ -73,11 +87,12 @@ export async function createCircleSmartAccountFromDynamic(
     transport: modularTransport,
   });
 
-  // Create bundler client for user operations (gasless transactions)
-  const bundlerClient = createBundlerClient({
-    chain: publicClient.chain,
-    transport: modularTransport,
-  });
+  // Note: bundlerClient is created for future gasless transaction support
+  // Currently not used, but will be needed for sendUserOperation() calls
+  // const bundlerClient = createBundlerClient({
+  //   chain: publicClient.chain,
+  //   transport: modularTransport,
+  // });
 
   // Convert Dynamic wallet to local account
   const owner = walletClientToLocalAccount(walletClient);
@@ -93,7 +108,10 @@ export async function createCircleSmartAccountFromDynamic(
 
 /**
  * Get Circle Smart Account address
- * This is the address users will see and use for transactions
+ * 
+ * NOTE: This returns the Circle Smart Account address on Polygon Amoy.
+ * Main transactions still use Arc network via Dynamic wallet.
+ * Circle Smart Account is for gasless transactions on Polygon Amoy only.
  */
 export async function getCircleSmartAccountAddress(
   walletClient: any

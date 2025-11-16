@@ -142,7 +142,6 @@ export function DynamicWallet() {
           </div>
         )}
         <div className="mb-3 pt-2 border-t border-gray-200">
-          <CircleSmartWallet />
           <WalletBalance />
         </div>
         <Link 
