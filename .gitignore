@@ -74,6 +74,8 @@ railway.json
 
 # Development scripts folder
 scripts/
+!web/scripts/
+!web/scripts/apply-source-map-shim.cjs
 
 # Circle recovery folder
 circle-recovery/

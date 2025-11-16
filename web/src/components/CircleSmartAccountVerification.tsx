@@ -12,6 +12,7 @@ export function CircleSmartAccountVerification() {
   const [status, setStatus] = useState<"checking" | "success" | "error">("checking");
   const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!primaryWallet?.address) {
@@ -30,6 +31,7 @@ export function CircleSmartAccountVerification() {
       if (!wallet) {
         setStatus("error");
         setError("Dynamic wallet not connected");
+        setDebugInfo("Wallet instance missing from Dynamic context");
         console.error("❌ Circle Smart Account verification: wallet instance missing");
         return;
       }
@@ -67,6 +69,8 @@ export function CircleSmartAccountVerification() {
 
         setSmartAccountAddress(address);
         setStatus("success");
+        setError(null);
+        setDebugInfo(`Smart account address: ${address}`);
         console.log("✅ Circle Smart Account verified:", address);
       } catch (err: any) {
         setStatus("error");
@@ -88,6 +92,13 @@ export function CircleSmartAccountVerification() {
         }
 
         setError(userFriendlyError);
+        const rawMessage = err?.message || "";
+        const rawStack = err?.stack || "";
+        setDebugInfo(
+          rawMessage
+            ? `${rawMessage}${err?.code ? ` (code: ${err.code})` : ""}`
+            : rawStack || "Unknown error"
+        );
         console.error("❌ Circle Smart Account verification failed:", {
           error: err.message,
           stack: err.stack,
@@ -137,9 +148,17 @@ export function CircleSmartAccountVerification() {
         <div className="text-xs text-red-700">
           <div className="font-semibold mb-1">⚠️ Gasless Transactions Unavailable</div>
           <div className="text-red-600 mb-2">{error}</div>
-          <div className="text-red-500 text-xs">
+          <div className="text-red-500 text-xs mb-2">
             Don't worry! You can still send gifts using standard transactions. Gasless transactions are optional.
           </div>
+          {debugInfo && (
+            <details className="text-[10px] text-red-500 bg-red-50 border border-red-200 rounded p-2">
+              <summary className="cursor-pointer text-xs font-semibold">
+                Technical details
+              </summary>
+              <pre className="whitespace-pre-wrap break-all mt-1">{debugInfo}</pre>
+            </details>
+          )}
         </div>
       )}
     </div>

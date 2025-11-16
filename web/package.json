@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "set NEXT_DISABLE_DEVTOOLS=1&& next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "postinstall": "node scripts/apply-source-map-shim.cjs"
   },
   "dependencies": {
     "@circle-fin/modular-wallets-core": "^1.0.12",
