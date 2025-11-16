@@ -129,9 +129,54 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
 
     try {
       // Create adapter from wallet client
+      // BridgeKit needs a provider that supports eth_requestAccounts
+      // For Dynamic wallets, we need to use window.ethereum (the actual wallet provider)
+      // NOT the transport which points to RPC endpoints
       setStatusMessage("Creating adapter...");
+      
+      let provider: any = null;
+      
+      // Priority 1: Use window.ethereum (the actual wallet provider)
+      // This is what BridgeKit needs - a provider that can handle account requests
+      if (typeof window !== 'undefined' && (window as any).ethereum) {
+        provider = (window as any).ethereum;
+        console.log("✅ Using window.ethereum provider");
+      } else {
+        // Fallback: Try to create a provider wrapper from the wallet client
+        // This is less ideal but may work for some wallet types
+        if (client) {
+          // Create a provider-like object that wraps the wallet client
+          provider = {
+            request: async (args: { method: string; params?: any[] }) => {
+              // For account requests, return the wallet address
+              if (args.method === 'eth_requestAccounts' || args.method === 'eth_accounts') {
+                const address = sourceWallet === "primary" ? primaryWalletAddress : (smartAccountAddress || "");
+                return address ? [address] : [];
+              }
+              // For other requests, use the client's request method if available
+              if (typeof (client as any).request === 'function') {
+                return (client as any).request(args);
+              }
+              // Fallback to transport if available
+              if ((client as any).transport && typeof (client as any).transport.request === 'function') {
+                return (client as any).transport.request(args);
+              }
+              throw new Error(`Method ${args.method} not supported`);
+            },
+            // Add other EIP-1193 provider methods if needed
+            on: () => {},
+            removeListener: () => {},
+          };
+          console.log("⚠️ Using fallback provider wrapper");
+        }
+      }
+      
+      if (!provider) {
+        throw new Error("Unable to get provider from wallet. Please ensure your wallet is connected and supports EIP-1193.");
+      }
+      
       const adapter = await createAdapterFromProvider({
-        provider: client.transport as any,
+        provider: provider,
       });
 
       // Initialize BridgeKit (no config needed - uses default CCTPv2 provider)
