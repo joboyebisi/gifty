@@ -12,7 +12,10 @@
     "bot:dev": "tsx watch scripts/telegram-bot.ts",
     "deploy": "node scripts/deploy.js",
     "deploy:win": "powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1",
-    "deploy:unix": "bash scripts/deploy.sh"
+    "deploy:unix": "bash scripts/deploy.sh",
+    "test:claim": "node test-claim-flow.js",
+    "test:claim:onboarding": "node test-claim-onboarding.js",
+    "test:claim:integration": "bash test-claim-integration.sh"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.1.0",

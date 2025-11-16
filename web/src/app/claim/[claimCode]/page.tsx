@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import Link from "next/link";
 import confetti from "canvas-confetti";
+import { createCircleSmartAccountFromDynamic } from "../../../lib/circle-smart-account";
 
 interface Gift {
   id: string;
@@ -18,7 +19,7 @@ interface Gift {
 export default function ClaimPage() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  const { primaryWallet, user: dynamicUser, setShowAuthFlow } = useDynamicContext();
   const [gift, setGift] = useState<Gift | null>(null);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
@@ -28,24 +29,87 @@ export default function ClaimPage() {
   const [showThankYou, setShowThankYou] = useState(false);
   const [thankYouMessage, setThankYouMessage] = useState("");
   const [sendingThankYou, setSendingThankYou] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+  const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
   const confettiTriggered = useRef(false);
 
   const claimCode = params?.claimCode as string;
   const secretFromUrl = searchParams?.get("secret") || "";
   const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
+  // Extract secret from URL
   useEffect(() => {
     if (secretFromUrl) {
       setClaimSecret(secretFromUrl);
     }
   }, [secretFromUrl]);
 
+  // Check if user needs onboarding when they land on claim page
   useEffect(() => {
-    if (!claimCode) {
-      setError("Invalid claim code");
-      setLoading(false);
-      return;
+    if (!claimCode || onboardingChecked) return;
+
+    // If user is not authenticated, they need to onboard
+    if (!dynamicUser || !primaryWallet?.address) {
+      setNeedsOnboarding(true);
+      setOnboardingChecked(true);
+      // Show auth flow to create account
+      setTimeout(() => {
+        setShowAuthFlow(true);
+      }, 500); // Small delay to let page render
+    } else {
+      // User is authenticated, create account in backend if needed
+      const createAccount = async () => {
+        try {
+          const queryParams = new URLSearchParams({
+            walletAddress: primaryWallet.address,
+          });
+          
+          // Auto-create account by fetching user (will create if doesn't exist)
+          await fetch(`${API}/api/users/me?${queryParams.toString()}`);
+          console.log("✅ Account ready for gift claiming");
+        } catch (err) {
+          console.error("Failed to sync account:", err);
+        }
+      };
+      
+      createAccount();
+      setOnboardingChecked(true);
     }
+  }, [claimCode, dynamicUser, primaryWallet?.address, setShowAuthFlow, API, onboardingChecked]);
+
+  // Reset onboarding state when wallet connects (user completed onboarding)
+  useEffect(() => {
+    if (primaryWallet?.address && needsOnboarding) {
+      console.log("✅ Wallet connected, resetting onboarding state");
+      setNeedsOnboarding(false);
+      
+      // Create backend account when wallet connects
+      const createAccount = async () => {
+        try {
+          const queryParams = new URLSearchParams({
+            walletAddress: primaryWallet.address,
+          });
+          await fetch(`${API}/api/users/me?${queryParams.toString()}`);
+          console.log("✅ Account ready for gift claiming");
+        } catch (err) {
+          console.error("Failed to sync account:", err);
+        }
+      };
+      
+      createAccount();
+      
+      // Ensure gift loads if it hasn't yet (force reload)
+      if (!gift && claimCode) {
+        setLoading(true);
+        // Gift will load via the other useEffect, but we ensure it triggers
+      }
+    }
+  }, [primaryWallet?.address, needsOnboarding, gift, claimCode, API]);
+
+  // Load gift details
+  useEffect(() => {
+    if (!claimCode || !onboardingChecked) return;
 
     async function fetchGift() {
       try {
@@ -68,16 +132,60 @@ export default function ClaimPage() {
     }
 
     fetchGift();
-  }, [claimCode, secretFromUrl, API]);
+  }, [claimCode, secretFromUrl, API, onboardingChecked]);
+
+  // Load Circle Smart Account address when wallet is connected
+  useEffect(() => {
+    if (!primaryWallet?.address || smartAccountAddress) return;
+
+    const loadSmartAccount = async () => {
+      try {
+        // Wait a bit for Dynamic wallet to fully initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // We need to get the wallet client from Dynamic
+        if (primaryWallet && typeof (primaryWallet as any).getWalletClient === 'function') {
+          const walletClient = await (primaryWallet as any).getWalletClient();
+          if (walletClient) {
+            console.log("🔄 Creating Smart Account for claiming...");
+            const smartAccount = await createCircleSmartAccountFromDynamic(walletClient);
+            const address = await smartAccount.getAddress();
+            setSmartAccountAddress(address);
+            console.log("✅ Smart Account loaded for claiming:", address);
+          } else {
+            console.warn("⚠️ Wallet client not available yet");
+          }
+        } else {
+          console.warn("⚠️ getWalletClient not available on primaryWallet");
+        }
+      } catch (err: any) {
+        console.warn("⚠️ Could not load Smart Account (will use primary wallet):", err.message);
+        // Don't set error state - gracefully fall back to primary wallet
+      }
+    };
+
+    loadSmartAccount();
+  }, [primaryWallet?.address, smartAccountAddress]);
 
   async function handleClaim() {
     if (!primaryWallet?.address) {
       setError("Please connect your wallet first");
+      setShowAuthFlow(true);
       return;
     }
 
     if (!gift) {
-      setError("Gift not loaded");
+      setError("Gift not loaded. Please wait or refresh the page.");
+      return;
+    }
+
+    if (gift.status === "claimed") {
+      setError("This gift has already been claimed.");
+      return;
+    }
+
+    if (gift.status === "expired") {
+      setError("This gift has expired.");
       return;
     }
 
@@ -96,11 +204,17 @@ export default function ClaimPage() {
 
     try {
       // Use the execute endpoint with claim code (not gift ID)
+      // Use Smart Account address if available, otherwise primary wallet
+      const recipientWallet = smartAccountAddress || primaryWallet.address;
+      const walletType = smartAccountAddress ? "Smart Account (Gasless)" : "Primary Wallet";
+      
+      console.log(`🎁 Claiming gift to ${walletType}: ${recipientWallet}`);
+      
       const res = await fetch(`${API}/api/gifts/claim/${claimCode}/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          walletAddress: primaryWallet.address,
+          walletAddress: recipientWallet, // Use Smart Account for gasless claiming if available
           secret: claimSecret || undefined,
         }),
       });
@@ -110,6 +224,14 @@ export default function ClaimPage() {
       if (res.ok && data.success) {
         setSuccess(true);
         setGift({ ...gift, status: "claimed" });
+        
+        // Log success details for debugging
+        console.log("✅ Gift claimed successfully:", {
+          transferId: data.transfer?.id,
+          wallet: recipientWallet,
+          walletType,
+          amount: gift.amountUsdc,
+        });
         
         // Trigger confetti animation
         if (!confettiTriggered.current) {
@@ -139,14 +261,62 @@ export default function ClaimPage() {
           }, 250);
         }
       } else {
-        setError(data.error || "Failed to claim gift");
+        const errorMsg = data.error || "Failed to claim gift";
+        console.error("❌ Claim failed:", errorMsg, data);
+        setError(errorMsg);
+        
+        // Provide helpful error messages
+        if (errorMsg.includes("already claimed")) {
+          setGift({ ...gift, status: "claimed" });
+        } else if (errorMsg.includes("expired")) {
+          setGift({ ...gift, status: "expired" });
+        } else if (errorMsg.includes("insufficient") || errorMsg.includes("balance")) {
+          setError(`${errorMsg}. Please contact the sender.`);
+        } else if (errorMsg.includes("escrow")) {
+          setError(`${errorMsg}. The gift may not be funded yet.`);
+        }
       }
     } catch (err: any) {
-      console.error("Claim error:", err);
-      setError(err?.message || "Failed to claim gift");
+      console.error("❌ Claim error:", err);
+      const errorMsg = err?.message || "Failed to claim gift. Please try again.";
+      setError(errorMsg);
+      
+      // Network errors
+      if (err.message?.includes("fetch") || err.message?.includes("network")) {
+        setError("Network error. Please check your connection and try again.");
+      }
     } finally {
       setClaiming(false);
     }
+  }
+
+  // Show onboarding prompt if user needs to connect wallet
+  // Only show if we haven't loaded the gift yet (to avoid blocking after wallet connects)
+  if (needsOnboarding && !primaryWallet?.address && !gift) {
+    return (
+      <div className="tg-viewport max-w-md mx-auto px-4 py-8">
+        <div className="tg-card p-6 text-center">
+          <div className="text-6xl mb-4">🎁</div>
+          <h2 className="text-2xl font-bold mb-4">You Have a Gift to Claim!</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            To claim your gift, you'll need a wallet. We'll help you create one in just a few seconds.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                setShowAuthFlow(true);
+              }}
+              className="tg-button-primary w-full"
+            >
+              Create Wallet & Claim Gift
+            </button>
+            <p className="text-xs text-gray-500">
+              Your gift will be safe and you can always access it with your wallet
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -190,8 +360,13 @@ export default function ClaimPage() {
             </div>
           )}
           <p className="text-sm text-gray-600 mb-4">
-            The funds have been transferred to your wallet: {primaryWallet?.address?.slice(0, 6)}...{primaryWallet?.address?.slice(-4)}
+            The funds have been transferred to your {smartAccountAddress ? "Smart Account (Gasless)" : "wallet"}: {(smartAccountAddress || primaryWallet?.address)?.slice(0, 6)}...{(smartAccountAddress || primaryWallet?.address)?.slice(-4)}
           </p>
+          {smartAccountAddress && (
+            <p className="text-xs text-green-600 mb-2">
+              ✅ Claimed via Smart Account - No gas fees!
+            </p>
+          )}
           
           {/* Thank You Section */}
           {!showThankYou ? (
@@ -352,9 +527,26 @@ export default function ClaimPage() {
               <p className="text-xs text-blue-800 mb-2">
                 🔐 Please connect your wallet to claim this gift.
               </p>
-              <Link href="/" className="tg-button-primary text-center block text-xs">
+              <button
+                onClick={() => setShowAuthFlow(true)}
+                className="tg-button-primary w-full text-xs"
+              >
                 Connect Wallet
-              </Link>
+              </button>
+            </div>
+          )}
+          
+          {primaryWallet?.address && smartAccountAddress && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+              <p className="text-xs text-green-800 mb-1">
+                ✅ Wallet Connected
+              </p>
+              <p className="text-xs text-green-700">
+                Primary: {primaryWallet.address.slice(0, 6)}...{primaryWallet.address.slice(-4)}
+              </p>
+              <p className="text-xs text-green-700">
+                Smart Account: {smartAccountAddress.slice(0, 6)}...{smartAccountAddress.slice(-4)} (Gasless)
+              </p>
             </div>
           )}
         </div>
