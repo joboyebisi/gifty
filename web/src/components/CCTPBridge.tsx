@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useWalletClient, useSwitchChain } from "wagmi";
+import { useWalletClient, useSwitchChain, useChainId } from "wagmi";
 import { BridgeKit, Blockchain } from "@circle-fin/bridge-kit";
 import { createAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 import { sepoliaTestnet, arcTestnet } from "../config/chains";
@@ -32,6 +32,7 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
   const { primaryWallet } = useDynamicContext();
   const { data: walletClient } = useWalletClient();
   const { switchChain } = useSwitchChain();
+  const currentChainId = useChainId();
   
   const [sourceWallet, setSourceWallet] = useState<"primary" | "smart">("primary");
   const [sourceChain, setSourceChain] = useState<string>("eth-sepolia");
@@ -340,6 +341,49 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
 
       if (!fromChain || !toChain) {
         throw new Error(`Unsupported chain: ${sourceChain} or ${destinationChain}`);
+      }
+
+      // Get the source chain ID
+      const sourceChainId = sourceChain === "eth-sepolia" ? sepoliaTestnet.id : arcTestnet.id;
+      
+      // CRITICAL: Switch to source chain BEFORE calling bridge()
+      // BridgeKit expects the wallet to be on the source chain when it starts
+      if (currentChainId !== sourceChainId) {
+        setStatus("initializing");
+        setStatusMessage(`Switching to ${sourceChain === "eth-sepolia" ? "Ethereum Sepolia" : "Arc Testnet"}...`);
+        
+        console.log(`🔄 Current chain: ${currentChainId}, Need: ${sourceChainId}. Switching...`);
+        
+        if (!switchChain) {
+          throw new Error("Chain switching not available. Please switch to the source chain manually.");
+        }
+        
+        try {
+          await switchChain({ chainId: sourceChainId as any });
+          
+          // Wait a moment for the chain switch to complete
+          // BridgeKit will verify the chain, but we need to ensure it's fully switched
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Verify the chain switch succeeded
+          // Note: useChainId might not update immediately, so we check via the wallet client
+          if (walletClient?.chain?.id !== sourceChainId) {
+            // Try one more time with a longer wait
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // If still not switched, throw an error
+            if (walletClient?.chain?.id !== sourceChainId) {
+              throw new Error(`Failed to switch to ${sourceChain}. Please switch manually and try again.`);
+            }
+          }
+          
+          console.log(`✅ Successfully switched to chain ${sourceChainId}`);
+        } catch (switchError: any) {
+          console.error("Chain switch error:", switchError);
+          throw new Error(`Failed to switch to ${sourceChain}: ${switchError.message || switchError}. Please ensure your wallet supports this chain.`);
+        }
+      } else {
+        console.log(`✅ Already on source chain: ${sourceChainId}`);
       }
 
       setStatus("approving");
