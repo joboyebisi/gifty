@@ -303,19 +303,25 @@ export default function WalletPage() {
                     <span className="font-mono font-semibold">
                       {balances.sepolia.eth?.balanceFormatted || "0.00"}
                       {balances.sepolia.eth?.error && (
-                        <span className="text-red-500 ml-1">⚠️</span>
+                        <span className="text-red-500 ml-1" title={balances.sepolia.eth.error}>⚠️</span>
                       )}
                     </span>
                   </div>
+                  {balances.sepolia.eth?.error && (
+                    <div className="text-xs text-red-500 mt-0.5">{balances.sepolia.eth.error}</div>
+                  )}
                   <div className="flex justify-between text-xs">
                     <span className="text-gray-600">USDC:</span>
                     <span className="font-mono font-semibold text-green-600">
                       {balances.sepolia.usdc?.balanceFormatted || "0.00"}
                       {balances.sepolia.usdc?.error && (
-                        <span className="text-red-500 ml-1">⚠️</span>
+                        <span className="text-red-500 ml-1" title={balances.sepolia.usdc.error}>⚠️</span>
                       )}
                     </span>
                   </div>
+                  {balances.sepolia.usdc?.error && (
+                    <div className="text-xs text-red-500 mt-0.5">{balances.sepolia.usdc.error}</div>
+                  )}
                 </div>
               )}
               {balances?.arc && (
@@ -326,10 +332,13 @@ export default function WalletPage() {
                     <span className="font-mono font-semibold text-green-600">
                       {balances.arc.usdc?.balanceFormatted || "0.00"}
                       {balances.arc.usdc?.error && (
-                        <span className="text-red-500 ml-1">⚠️</span>
+                        <span className="text-red-500 ml-1" title={balances.arc.usdc.error}>⚠️</span>
                       )}
                     </span>
                   </div>
+                  {balances.arc.usdc?.error && (
+                    <div className="text-xs text-red-500 mt-0.5">{balances.arc.usdc.error}</div>
+                  )}
                 </div>
               )}
               {!balances?.sepolia && !balances?.arc && !balances?.error && (
@@ -371,19 +380,25 @@ export default function WalletPage() {
                         <span className="font-mono font-semibold">
                           {smartAccountBalances.sepolia.eth?.balanceFormatted || "0.00"}
                           {smartAccountBalances.sepolia.eth?.error && (
-                            <span className="text-red-500 ml-1">⚠️</span>
+                            <span className="text-red-500 ml-1" title={smartAccountBalances.sepolia.eth.error}>⚠️</span>
                           )}
                         </span>
                       </div>
+                      {smartAccountBalances.sepolia.eth?.error && (
+                        <div className="text-xs text-red-500 mt-0.5">{smartAccountBalances.sepolia.eth.error}</div>
+                      )}
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-600">USDC:</span>
                         <span className="font-mono font-semibold text-green-600">
                           {smartAccountBalances.sepolia.usdc?.balanceFormatted || "0.00"}
                           {smartAccountBalances.sepolia.usdc?.error && (
-                            <span className="text-red-500 ml-1">⚠️</span>
+                            <span className="text-red-500 ml-1" title={smartAccountBalances.sepolia.usdc.error}>⚠️</span>
                           )}
                         </span>
                       </div>
+                      {smartAccountBalances.sepolia.usdc?.error && (
+                        <div className="text-xs text-red-500 mt-0.5">{smartAccountBalances.sepolia.usdc.error}</div>
+                      )}
                     </div>
                   )}
                   {smartAccountBalances?.arc && (
@@ -394,10 +409,13 @@ export default function WalletPage() {
                         <span className="font-mono font-semibold text-green-600">
                           {smartAccountBalances.arc.usdc?.balanceFormatted || "0.00"}
                           {smartAccountBalances.arc.usdc?.error && (
-                            <span className="text-red-500 ml-1">⚠️</span>
+                            <span className="text-red-500 ml-1" title={smartAccountBalances.arc.usdc.error}>⚠️</span>
                           )}
                         </span>
                       </div>
+                      {smartAccountBalances.arc.usdc?.error && (
+                        <div className="text-xs text-red-500 mt-0.5">{smartAccountBalances.arc.usdc.error}</div>
+                      )}
                     </div>
                   )}
                   {!smartAccountBalances?.sepolia && !smartAccountBalances?.arc && !smartAccountBalances?.error && (

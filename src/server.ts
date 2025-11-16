@@ -1273,18 +1273,34 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
         try {
           sepoliaBalances = await getChainBalances(user.walletAddress, "11155111"); // Sepolia
           console.log(`✅ Sepolia balances: ETH=${sepoliaBalances.native.balanceFormatted}, USDC=${sepoliaBalances.usdc.balanceFormatted}`);
+          if (sepoliaBalances.native.error) {
+            console.warn(`⚠️ Sepolia ETH error: ${sepoliaBalances.native.error}`);
+          }
+          if (sepoliaBalances.usdc.error) {
+            console.warn(`⚠️ Sepolia USDC error: ${sepoliaBalances.usdc.error}`);
+          }
         } catch (sepoliaError: any) {
-          console.error("Error fetching Sepolia balances:", sepoliaError);
+          console.error("❌ Error fetching Sepolia balances:", sepoliaError);
+          console.error("   Stack:", sepoliaError.stack);
           error = `Sepolia: ${sepoliaError.message}`;
         }
         
-        // Also get Arc Testnet balance for backwards compatibility
+        // Also get Arc Testnet balance (using correct chain ID)
         try {
-          arcBalance = await getWalletBalance(user.walletAddress, "117000"); // Arc Testnet
+          const arcBalances = await getChainBalances(user.walletAddress, "5042002"); // Arc Testnet (correct chain ID)
+          arcBalance = {
+            balance: arcBalances.usdc.balance,
+            balanceFormatted: arcBalances.usdc.balanceFormatted,
+            error: arcBalances.usdc.error,
+          };
           console.log(`✅ Arc balance: ${arcBalance.balanceFormatted} USDC`);
+          if (arcBalances.usdc.error) {
+            console.warn(`⚠️ Arc USDC error: ${arcBalances.usdc.error}`);
+          }
         } catch (arcError: any) {
-          console.error("Error fetching Arc balance:", arcError);
-          // Non-critical error
+          console.error("❌ Error fetching Arc balance:", arcError);
+          console.error("   Stack:", arcError.stack);
+          // Non-critical error - continue without Arc balance
         }
       } catch (onChainError: any) {
         console.log(`⚠️ On-chain balance error: ${onChainError.message}`);
@@ -1340,7 +1356,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
         },
       } : null,
       arc: arcBalance && !arcBalance.error ? {
-        chainId: "117000",
+        chainId: "5042002", // Correct Arc Testnet chain ID
         chainName: "Arc Testnet",
         usdc: {
           balance: arcBalance.balance,

@@ -25,7 +25,7 @@ function getRPCUrls(): Record<string, string> {
   const env = loadEnv();
   return {
     "5042002": env.ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc.network", // Arc Testnet (official)
-    "11155111": env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org", // Ethereum Sepolia - public RPC (fallback: https://ethereum-sepolia-rpc.publicnode.com)
+    "11155111": env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com", // Ethereum Sepolia - using publicnode (more reliable)
   };
 }
 
@@ -236,7 +236,7 @@ export async function getChainBalances(
   chainId: string = "11155111" // Sepolia by default
 ): Promise<ChainBalances> {
   const chainNames: Record<string, string> = {
-    "117000": "Arc Testnet",
+    "5042002": "Arc Testnet", // Correct Arc Testnet chain ID
     "11155111": "Ethereum Sepolia",
   };
 
