@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { useWalletClient } from "wagmi";
+import { useWalletClient, useSwitchChain } from "wagmi";
 import { BridgeKit, Blockchain } from "@circle-fin/bridge-kit";
 import { createAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
+import { sepoliaTestnet, arcTestnet } from "../config/chains";
 
 interface CCTPBridgeProps {
   primaryWalletAddress: string;
@@ -30,6 +31,7 @@ const CHAIN_MAP: Record<string, Blockchain> = {
 export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransferComplete }: CCTPBridgeProps) {
   const { primaryWallet } = useDynamicContext();
   const { data: walletClient } = useWalletClient();
+  const { switchChain } = useSwitchChain();
   
   const [sourceWallet, setSourceWallet] = useState<"primary" | "smart">("primary");
   const [sourceChain, setSourceChain] = useState<string>("eth-sepolia");
@@ -153,16 +155,94 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
                 return [address];
               }
               
-              // For chain switching, use the wallet client's request method
-              if (args.method === 'wallet_switchEthereumChain' || args.method === 'wallet_addEthereumChain') {
-                if (typeof (client as any).request === 'function') {
-                  return (client as any).request(args);
+              // For chain switching, use wagmi's switchChain or Dynamic's chain switching
+              // DO NOT route this through RPC endpoints - they don't support wallet methods
+              if (args.method === 'wallet_switchEthereumChain') {
+                const chainIdParam = args.params?.[0]?.chainId;
+                if (!chainIdParam) {
+                  throw new Error("Chain ID required for chain switching");
                 }
-                // If client doesn't support it, try window.ethereum as fallback
+                
+                // Parse chain ID (can be hex string like "0xaa36a7" or number)
+                const chainId = typeof chainIdParam === 'string' 
+                  ? parseInt(chainIdParam, 16) 
+                  : chainIdParam;
+                
+                console.log(`🔄 BridgeKit requesting chain switch to: ${chainId}`);
+                
+                // Use wagmi's switchChain if available
+                if (switchChain) {
+                  try {
+                    await switchChain({ chainId: chainId as any });
+                    return null; // Success - return null as per EIP-1193 spec
+                  } catch (switchError: any) {
+                    // If chain not found, try to add it first
+                    if (switchError.code === 4902) {
+                      // Try to add the chain
+                      const chainConfig = chainId === sepoliaTestnet.id ? sepoliaTestnet : 
+                                        chainId === arcTestnet.id ? arcTestnet : null;
+                      
+                      if (chainConfig && typeof window !== 'undefined' && (window as any).ethereum) {
+                        try {
+                          await (window as any).ethereum.request({
+                            method: 'wallet_addEthereumChain',
+                            params: [{
+                              chainId: `0x${chainId.toString(16)}`,
+                              chainName: chainConfig.name,
+                              nativeCurrency: chainConfig.nativeCurrency,
+                              rpcUrls: [chainConfig.rpcUrls.default.http[0]],
+                              blockExplorerUrls: chainConfig.blockExplorers?.default?.url ? [chainConfig.blockExplorers.default.url] : undefined,
+                            }],
+                          });
+                          // Retry switch after adding
+                          if (switchChain) {
+                            await switchChain({ chainId: chainId as any });
+                          }
+                          return null;
+                        } catch (addError) {
+                          throw new Error(`Failed to add chain ${chainId}: ${addError}`);
+                        }
+                      }
+                    }
+                    throw switchError;
+                  }
+                }
+                
+                // Fallback: Try Dynamic's chain switching
+                if (primaryWallet && typeof (primaryWallet as any).setChain === 'function') {
+                  try {
+                    await (primaryWallet as any).setChain({ chainId });
+                    return null;
+                  } catch (dynamicError) {
+                    console.error("Dynamic chain switch failed:", dynamicError);
+                  }
+                }
+                
+                // Final fallback: Try window.ethereum
                 if (typeof window !== 'undefined' && (window as any).ethereum) {
-                  return (window as any).ethereum.request(args);
+                  try {
+                    await (window as any).ethereum.request(args);
+                    return null;
+                  } catch (ethereumError) {
+                    throw new Error(`Chain switching failed: ${ethereumError}`);
+                  }
                 }
-                throw new Error("Chain switching not supported");
+                
+                throw new Error("Chain switching not supported by wallet");
+              }
+              
+              // For adding chains
+              if (args.method === 'wallet_addEthereumChain') {
+                // Try window.ethereum first (most reliable for adding chains)
+                if (typeof window !== 'undefined' && (window as any).ethereum) {
+                  try {
+                    await (window as any).ethereum.request(args);
+                    return null;
+                  } catch (addError) {
+                    throw new Error(`Failed to add chain: ${addError}`);
+                  }
+                }
+                throw new Error("Chain addition not supported");
               }
               
               // For other requests, use the client's request method if available
