@@ -30,9 +30,11 @@ const nextConfig = {
     };
     
     // Ignore the private-next-instrumentation-client module (internal Next.js module)
+    // Also handle source-map on client side
     config.resolve.alias = {
       ...config.resolve.alias,
       'private-next-instrumentation-client': false,
+      'next/dist/compiled/source-map': path.resolve(__dirname, 'webpack-source-map-shim.js'),
     };
     
     // Prevent resolving files outside project root
@@ -59,14 +61,22 @@ const nextConfig = {
       })
     );
     
-    // CRITICAL FIX: Create a shim for the missing source-map module
-    // This prevents Next.js from crashing when it tries to require this module
+    // CRITICAL FIX: Handle source-map module issue
+    // Try multiple approaches to prevent Next.js from crashing
     if (isServer) {
+      // Approach 1: Replace with shim
       config.plugins.push(
         new webpack.NormalModuleReplacementPlugin(
           /^next\/dist\/compiled\/source-map$/,
           path.resolve(__dirname, 'webpack-source-map-shim.js')
         )
+      );
+      
+      // Approach 2: Also ignore as fallback
+      config.plugins.push(
+        new webpack.IgnorePlugin({
+          resourceRegExp: /^next\/dist\/compiled\/source-map$/,
+        })
       );
     }
     
