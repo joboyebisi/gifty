@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
-import { CCTPService } from "../lib/defi/cctp-integration";
+import { useWalletClient } from "wagmi";
+import { BridgeKit, Blockchain } from "@circle-fin/bridge-kit";
+import { createAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 
 interface CCTPBridgeProps {
   primaryWalletAddress: string;
@@ -19,8 +21,15 @@ type BridgeStatus =
   | "completed"
   | "error";
 
+// Map our chain names to BridgeKit chain identifiers
+const CHAIN_MAP: Record<string, Blockchain> = {
+  "eth-sepolia": Blockchain.Ethereum_Sepolia,
+  "arc-testnet": Blockchain.Arc_Testnet,
+};
+
 export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransferComplete }: CCTPBridgeProps) {
   const { primaryWallet } = useDynamicContext();
+  const { data: walletClient } = useWalletClient();
   
   const [sourceWallet, setSourceWallet] = useState<"primary" | "smart">("primary");
   const [sourceChain, setSourceChain] = useState<string>("eth-sepolia");
@@ -29,10 +38,7 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
   const [amount, setAmount] = useState<string>("");
   const [status, setStatus] = useState<BridgeStatus>("idle");
   const [statusMessage, setStatusMessage] = useState<string>("");
-  const [result, setResult] = useState<{ success: boolean; message: string; transferId?: string } | null>(null);
-
-  const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-  const cctpService = new CCTPService(API);
+  const [result, setResult] = useState<{ success: boolean; message: string; txHashes?: { approval?: string; burn?: string; mint?: string } } | null>(null);
 
   const handleTransfer = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -40,7 +46,7 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
       return;
     }
 
-    if (!primaryWallet) {
+    if (!primaryWallet || !walletClient) {
       setResult({ success: false, message: "Wallet not connected" });
       return;
     }
@@ -55,85 +61,96 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
     }
 
     setStatus("initializing");
-    setStatusMessage("Initializing CCTP transfer...");
+    setStatusMessage("Initializing BridgeKit...");
     setResult(null);
 
     try {
-      setStatus("approving");
-      setStatusMessage("Initiating transfer (approval, burn, attestation, mint)...");
-
-      // Convert amount to smallest unit (USDC has 6 decimals)
-      const amountInSmallestUnit = (parseFloat(amount) * 1000000).toString();
-
-      // Use backend CCTP service (will be upgraded to BridgeKit after package installation)
-      const transferResult = await cctpService.initiateTransfer({
-        amount: amountInSmallestUnit,
-        sourceChain,
-        destinationChain,
-        recipientAddress,
-        senderWalletAddress: sourceAddress,
+      // Create adapter from wallet client
+      setStatusMessage("Creating adapter...");
+      const adapter = await createAdapterFromProvider({
+        provider: walletClient.transport as any,
       });
 
-      if (transferResult.success && transferResult.transferId) {
-        setStatus("waiting-attestation");
-        setStatusMessage("Waiting for Circle attestation (10-20 seconds)...");
+      // Initialize BridgeKit (no config needed - uses default CCTPv2 provider)
+      const kit = new BridgeKit();
+
+      // Map chain names to BridgeKit Blockchain enum
+      const fromChain = CHAIN_MAP[sourceChain];
+      const toChain = CHAIN_MAP[destinationChain];
+
+      if (!fromChain || !toChain) {
+        throw new Error(`Unsupported chain: ${sourceChain} or ${destinationChain}`);
+      }
+
+      setStatus("approving");
+      setStatusMessage("Starting bridge (approve → burn → attestation → mint)...");
+
+      // Execute bridge using BridgeKit
+      const bridgeResult = await kit.bridge({
+        from: {
+          adapter,
+          chain: fromChain,
+        },
+        to: {
+          adapter,
+          chain: toChain,
+          recipientAddress, // Custom recipient address
+        },
+        amount: amount, // Amount as string
+      });
+
+      // Extract transaction hashes from steps
+      const approvalStep = bridgeResult.steps.find(s => s.name.toLowerCase().includes("approve"));
+      const burnStep = bridgeResult.steps.find(s => s.name.toLowerCase().includes("burn"));
+      const mintStep = bridgeResult.steps.find(s => s.name.toLowerCase().includes("mint"));
+
+      const txHashes = {
+        approval: approvalStep?.txHash,
+        burn: burnStep?.txHash,
+        mint: mintStep?.txHash,
+      };
+
+      // Update status based on result state
+      if (bridgeResult.state === "success") {
+        setStatus("completed");
+        setStatusMessage("Transfer completed successfully!");
+        setResult({
+          success: true,
+          message: `Successfully bridged ${bridgeResult.amount} ${bridgeResult.token} from ${bridgeResult.source.chain.name} to ${bridgeResult.destination.chain.name}`,
+          txHashes,
+        });
         
-        // Poll for completion
-        let attempts = 0;
-        const maxAttempts = 30; // 30 attempts = ~30 seconds
-        
-        const checkStatus = async () => {
-          try {
-            const statusResult = await cctpService.getTransferStatus(transferResult.transferId!);
-            if (statusResult.success) {
-              setStatus("completed");
-              setStatusMessage("Transfer completed successfully!");
-              setResult({
-                success: true,
-                message: `Successfully bridged ${amount} USDC from ${sourceChain} to ${destinationChain}`,
-                transferId: transferResult.transferId,
-              });
-              if (onTransferComplete) {
-                setTimeout(() => {
-                  onTransferComplete();
-                }, 2000);
-              }
-            } else if (attempts < maxAttempts) {
-              attempts++;
-              setTimeout(checkStatus, 1000);
-            } else {
-              setStatus("completed");
-              setStatusMessage("Transfer initiated - check status manually");
-              setResult({
-                success: true,
-                message: `Transfer initiated! Transfer ID: ${transferResult.transferId}. It may take 10-20 seconds to complete.`,
-                transferId: transferResult.transferId,
-              });
-            }
-          } catch (err) {
-            // Still show success if transfer was initiated
-            setStatus("completed");
-            setStatusMessage("Transfer initiated");
-            setResult({
-              success: true,
-              message: `Transfer initiated! Transfer ID: ${transferResult.transferId}. Please check status manually.`,
-              transferId: transferResult.transferId,
-            });
-          }
-        };
-        
-        // Start polling after a short delay
-        setTimeout(checkStatus, 2000);
+        if (onTransferComplete) {
+          setTimeout(() => {
+            onTransferComplete();
+          }, 2000);
+        }
+      } else if (bridgeResult.state === "pending") {
+        // Transfer initiated but not complete yet
+        if (burnStep?.txHash) {
+          setStatus("waiting-attestation");
+          setStatusMessage("Waiting for Circle attestation (10-20 seconds)...");
+        } else {
+          setStatus("burning");
+          setStatusMessage("Burning USDC on source chain...");
+        }
+        setResult({
+          success: true,
+          message: `Transfer initiated! ${burnStep?.txHash ? `Burn transaction: ${burnStep.txHash}. Waiting for attestation...` : "Processing..."}`,
+          txHashes,
+        });
       } else {
-        throw new Error(transferResult.error || "Transfer failed");
+        // Error state
+        const errorStep = bridgeResult.steps.find(s => s.state === "error");
+        throw new Error(errorStep?.errorMessage || "Bridge failed");
       }
     } catch (error: any) {
-      console.error("Bridge error:", error);
+      console.error("BridgeKit error:", error);
       setStatus("error");
       setStatusMessage(error.message || "Bridge failed");
       setResult({
         success: false,
-        message: error.message || "Failed to bridge USDC",
+        message: error.message || "Failed to bridge USDC using BridgeKit",
       });
     }
   };
@@ -142,7 +159,7 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
   useEffect(() => {
     switch (status) {
       case "initializing":
-        setStatusMessage("Initializing transfer...");
+        setStatusMessage("Initializing BridgeKit...");
         break;
       case "approving":
         setStatusMessage("Approving USDC...");
@@ -295,9 +312,23 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
           }`}
         >
           {result.message}
-          {result.transferId && (
-            <div className="mt-2 text-xs font-mono break-all">
-              Transfer ID: {result.transferId}
+          {result.txHashes && (
+            <div className="mt-2 space-y-1 text-xs">
+              {result.txHashes.approval && (
+                <div className="font-mono break-all">
+                  Approval: {result.txHashes.approval}
+                </div>
+              )}
+              {result.txHashes.burn && (
+                <div className="font-mono break-all">
+                  Burn: {result.txHashes.burn}
+                </div>
+              )}
+              {result.txHashes.mint && (
+                <div className="font-mono break-all">
+                  Mint: {result.txHashes.mint}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -306,14 +337,14 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
       {/* Transfer Button */}
       <button
         onClick={handleTransfer}
-        disabled={status !== "idle" || !amount || parseFloat(amount) <= 0}
+        disabled={status !== "idle" || !amount || parseFloat(amount) <= 0 || !walletClient}
         className="tg-button-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {status !== "idle" ? `⏳ ${statusMessage}` : "🌉 Bridge USDC"}
       </button>
 
       <p className="text-xs text-gray-500 mt-3 text-center">
-        All transfers use Circle's CCTP protocol and settle on Arc network
+        Powered by Circle BridgeKit • All transfers use CCTP protocol and settle on Arc network
       </p>
     </div>
   );

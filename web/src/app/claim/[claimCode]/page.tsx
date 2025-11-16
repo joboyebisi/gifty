@@ -1,8 +1,9 @@
 "use client";
 import { useParams, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import Link from "next/link";
+import confetti from "canvas-confetti";
 
 interface Gift {
   id: string;
@@ -24,6 +25,10 @@ export default function ClaimPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [claimSecret, setClaimSecret] = useState("");
+  const [showThankYou, setShowThankYou] = useState(false);
+  const [thankYouMessage, setThankYouMessage] = useState("");
+  const [sendingThankYou, setSendingThankYou] = useState(false);
+  const confettiTriggered = useRef(false);
 
   const claimCode = params?.claimCode as string;
   const secretFromUrl = searchParams?.get("secret") || "";
@@ -105,6 +110,34 @@ export default function ClaimPage() {
       if (res.ok && data.success) {
         setSuccess(true);
         setGift({ ...gift, status: "claimed" });
+        
+        // Trigger confetti animation
+        if (!confettiTriggered.current) {
+          confettiTriggered.current = true;
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+            colors: ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A'],
+          });
+          // Additional burst after delay
+          setTimeout(() => {
+            confetti({
+              particleCount: 50,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0 },
+              colors: ['#FFD700', '#FF6B6B', '#4ECDC4'],
+            });
+            confetti({
+              particleCount: 50,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1 },
+              colors: ['#FFD700', '#FF6B6B', '#4ECDC4'],
+            });
+          }, 250);
+        }
       } else {
         setError(data.error || "Failed to claim gift");
       }
@@ -159,9 +192,110 @@ export default function ClaimPage() {
           <p className="text-sm text-gray-600 mb-4">
             The funds have been transferred to your wallet: {primaryWallet?.address?.slice(0, 6)}...{primaryWallet?.address?.slice(-4)}
           </p>
-          <Link href="/" className="tg-button-primary inline-block">
-            Go Home
-          </Link>
+          
+          {/* Thank You Section */}
+          {!showThankYou ? (
+            <div className="space-y-3 mt-4">
+              <button
+                onClick={() => setShowThankYou(true)}
+                className="tg-button-secondary w-full"
+              >
+                💌 Send Thank You
+              </button>
+              <Link href="/" className="tg-button-primary w-full inline-block text-center">
+                Go Home
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Thank You Message
+                </label>
+                <textarea
+                  value={thankYouMessage}
+                  onChange={(e) => setThankYouMessage(e.target.value)}
+                  placeholder="Thank you for the gift! I really appreciate it..."
+                  rows={3}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional: We can generate a personalized message using AI
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    // Generate AI thank you message
+                    setSendingThankYou(true);
+                    try {
+                      const res = await fetch(`${API}/api/ai/generate-thank-you`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          giftAmount: gift?.amountUsdc,
+                          senderMessage: gift?.message,
+                          recipientHandle: primaryWallet?.address,
+                        }),
+                      });
+                      const data = await res.json();
+                      if (res.ok && data.message) {
+                        setThankYouMessage(data.message);
+                      }
+                    } catch (err) {
+                      console.error("Failed to generate thank you:", err);
+                    } finally {
+                      setSendingThankYou(false);
+                    }
+                  }}
+                  disabled={sendingThankYou}
+                  className="tg-button-secondary flex-1 text-sm"
+                >
+                  {sendingThankYou ? "Generating..." : "✨ Generate with AI"}
+                </button>
+                <button
+                  onClick={() => setShowThankYou(false)}
+                  className="tg-button-secondary text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!gift?.id) return;
+                  setSendingThankYou(true);
+                  try {
+                    const res = await fetch(`${API}/api/gifts/${gift.id}/thank-you`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        message: thankYouMessage || "Thank you for the gift!",
+                        senderWalletAddress: gift.senderUserId, // This might need adjustment
+                      }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      alert("✅ Thank you message sent!");
+                      setShowThankYou(false);
+                    } else {
+                      alert(data.error || "Failed to send thank you");
+                    }
+                  } catch (err: any) {
+                    alert(err.message || "Failed to send thank you");
+                  } finally {
+                    setSendingThankYou(false);
+                  }
+                }}
+                disabled={sendingThankYou}
+                className="tg-button-primary w-full"
+              >
+                {sendingThankYou ? "Sending..." : "💌 Send Thank You"}
+              </button>
+              <Link href="/" className="tg-button-secondary w-full inline-block text-center text-sm">
+                Skip & Go Home
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     );

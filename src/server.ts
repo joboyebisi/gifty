@@ -671,6 +671,119 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
   }
 });
 
+// Generate AI-powered thank you message
+app.post("/api/ai/generate-thank-you", async (req: any, res: any) => {
+  try {
+    const { giftAmount, senderMessage, recipientHandle } = req.body;
+    
+    const prompt = `Generate a warm, personalized thank you message for receiving a gift of ${giftAmount} USDC. 
+${senderMessage ? `The sender included this message: "${senderMessage}"` : ""}
+Make it genuine, appreciative, and not too long (2-3 sentences).`;
+
+    // Use a simple AI generation approach - call the provider directly
+    const { loadEnv } = await import("./config/env");
+    const env = loadEnv();
+    
+    let message = "Thank you so much for the gift! I really appreciate your generosity.";
+    
+    try {
+      // Try to generate with AI if API keys are available
+      if (env.GEMINI_API_KEY) {
+        // Use a simple direct API call for thank you message generation
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${env.GEMINI_API_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: prompt }]
+            }]
+          }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json() as any;
+          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            message = data.candidates[0].content.parts[0].text.trim();
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to generate AI thank you, using default:", err);
+    }
+    
+    res.json({ message });
+  } catch (err: any) {
+    console.error("Error generating thank you:", err);
+    res.status(500).json({ error: err?.message || "Failed to generate thank you message" });
+  }
+});
+
+// Send thank you message for a gift
+app.post("/api/gifts/:id/thank-you", async (req: any, res: any) => {
+  try {
+    const { id } = req.params;
+    const { message, senderWalletAddress } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Get gift to find sender
+    const supabase = getSupabase();
+    if (!supabase) {
+      return res.status(500).json({ error: "Database not available" });
+    }
+
+    const { data: gift, error: giftError } = await supabase
+      .from("gifts")
+      .select("*, sender:users!gifts_sender_user_id_fkey(*)")
+      .eq("id", id)
+      .single();
+
+    if (giftError || !gift) {
+      return res.status(404).json({ error: "Gift not found" });
+    }
+
+    // Update gift with thank you message
+    await supabase
+      .from("gifts")
+      .update({
+        thank_you_sent: true,
+        thank_you_message: message,
+        thank_you_sent_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+
+    // Try to send notification to sender via Telegram if available
+    if (gift.sender?.telegram_handle || gift.sender?.telegram_user_id) {
+      try {
+        const { TelegramBot } = await import("./telegram/bot");
+        const bot = new TelegramBot();
+        
+        const telegramUserId = gift.sender.telegram_user_id 
+          ? Number(gift.sender.telegram_user_id)
+          : null;
+        
+        if (telegramUserId) {
+          const thankYouText = `💌 You received a thank you message for your gift!\n\n"${message}"`;
+          await bot.sendMessage(telegramUserId, thankYouText);
+        }
+      } catch (telegramError: any) {
+        console.error("Failed to send Telegram notification:", telegramError);
+        // Non-critical, continue
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Thank you message sent successfully",
+    });
+  } catch (err: any) {
+    console.error("Error sending thank you:", err);
+    res.status(500).json({ error: err?.message || "Failed to send thank you message" });
+  }
+});
+
 // Get upcoming birthdays
 app.get("/api/birthdays/upcoming", async (req: any, res: any) => {
   try {
@@ -1475,7 +1588,7 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
       "svix-timestamp": req.headers["svix-timestamp"] as string,
       "svix-signature": req.headers["svix-signature"] as string,
     };
-
+    
     // Verify webhook signature if secret is provided
     if (webhookSecret) {
       try {
