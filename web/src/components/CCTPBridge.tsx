@@ -129,21 +129,80 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
 
     try {
       // Create adapter from wallet client
-      // According to BridgeKit docs, for browser/wallet provider support:
-      // Use createAdapterFromProvider with window.ethereum OR
-      // Use createAdapterFromPrivateKey with provider parameter
+      // Priority: Use Dynamic wallet client directly (works in Telegram Mini App without MetaMask)
+      // Fallback: Use window.ethereum if available (for browser extensions)
       setStatusMessage("Creating adapter...");
       
       let adapter: any = null;
       
-      // Priority 1: Use window.ethereum directly (the actual wallet provider)
-      // This is what BridgeKit needs - a provider that can handle account requests
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
+      // Priority 1: Use Dynamic wallet client directly (Telegram Mini App compatible)
+      // This works without MetaMask - uses Dynamic's embedded wallet
+      if (client) {
+        try {
+          // Create a provider wrapper from the Dynamic wallet client
+          // This allows BridgeKit to work with Dynamic wallets in Telegram Mini Apps
+          const dynamicProvider = {
+            request: async (args: { method: string; params?: any[] }) => {
+              // For account requests, return the wallet address directly
+              // This avoids calling eth_requestAccounts which might trigger MetaMask
+              if (args.method === 'eth_requestAccounts' || args.method === 'eth_accounts') {
+                const address = sourceWallet === "primary" ? primaryWalletAddress : (smartAccountAddress || "");
+                if (!address) {
+                  throw new Error("Wallet address not available");
+                }
+                return [address];
+              }
+              
+              // For chain switching, use the wallet client's request method
+              if (args.method === 'wallet_switchEthereumChain' || args.method === 'wallet_addEthereumChain') {
+                if (typeof (client as any).request === 'function') {
+                  return (client as any).request(args);
+                }
+                // If client doesn't support it, try window.ethereum as fallback
+                if (typeof window !== 'undefined' && (window as any).ethereum) {
+                  return (window as any).ethereum.request(args);
+                }
+                throw new Error("Chain switching not supported");
+              }
+              
+              // For other requests, use the client's request method if available
+              if (typeof (client as any).request === 'function') {
+                return (client as any).request(args);
+              }
+              
+              // Fallback to transport if available
+              if ((client as any).transport && typeof (client as any).transport.request === 'function') {
+                return (client as any).transport.request(args);
+              }
+              
+              throw new Error(`Method ${args.method} not supported`);
+            },
+            // Add other EIP-1193 provider methods
+            on: () => {},
+            removeListener: () => {},
+            // Add provider identification (optional but helpful)
+            isMetaMask: false,
+            isCoinbaseWallet: false,
+            isDynamic: true, // Mark as Dynamic wallet
+          };
+          
+          adapter = await createAdapterFromProvider({
+            provider: dynamicProvider as any,
+          });
+          console.log("✅ Created adapter from Dynamic wallet client (Telegram Mini App compatible)");
+        } catch (adapterError: any) {
+          console.error("Failed to create adapter from Dynamic wallet client:", adapterError);
+          // Fall through to window.ethereum fallback
+        }
+      }
+      
+      // Fallback 2: Use window.ethereum if available (for browser extensions like MetaMask)
+      // This is only used if Dynamic wallet client fails
+      if (!adapter && typeof window !== 'undefined' && (window as any).ethereum) {
         try {
           const ethereum = (window as any).ethereum;
           
           // First, check if we already have accounts (non-blocking)
-          // This avoids triggering a new permission request if one is already pending
           let accounts: string[] = [];
           try {
             accounts = await ethereum.request({ method: 'eth_accounts' });
@@ -152,7 +211,6 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
           }
           
           // If we don't have accounts, try to request them
-          // But handle the "already pending" error gracefully
           if (!accounts || accounts.length === 0) {
             try {
               accounts = await ethereum.request({ method: 'eth_requestAccounts' });
@@ -161,11 +219,10 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
               if (permError.message?.includes('already pending') || permError.code === -32002) {
                 console.log("⏳ Permission request already pending, waiting 3 seconds...");
                 await new Promise(resolve => setTimeout(resolve, 3000));
-                // Retry once
                 try {
                   accounts = await ethereum.request({ method: 'eth_requestAccounts' });
                 } catch (retryError: any) {
-                  throw new Error("Please approve the wallet connection request in MetaMask and try again.");
+                  throw new Error("Please approve the wallet connection request and try again.");
                 }
               } else {
                 throw permError;
@@ -179,75 +236,16 @@ export function CCTPBridge({ primaryWalletAddress, smartAccountAddress, onTransf
           
           console.log("✅ Wallet connected:", accounts[0]);
           
-          // Now create the adapter - it should use the already-connected account
           adapter = await createAdapterFromProvider({
             provider: ethereum,
           });
-          console.log("✅ Created adapter from window.ethereum");
+          console.log("✅ Created adapter from window.ethereum (fallback)");
         } catch (adapterError: any) {
           console.error("Failed to create adapter from window.ethereum:", adapterError);
-          // Fall through to alternative method
+          // Continue to error handling below
         }
       }
       
-      // Fallback: Create a provider wrapper that handles account requests properly
-      if (!adapter && client) {
-        // Create a provider-like object that wraps the wallet client
-        // This handles eth_requestAccounts by returning the wallet address directly
-        const providerWrapper = {
-          request: async (args: { method: string; params?: any[] }) => {
-            // For account requests, return the wallet address directly
-            // This avoids calling eth_requestAccounts on RPC endpoints
-            if (args.method === 'eth_requestAccounts' || args.method === 'eth_accounts') {
-              const address = sourceWallet === "primary" ? primaryWalletAddress : (smartAccountAddress || "");
-              if (!address) {
-                throw new Error("Wallet address not available");
-              }
-              return [address];
-            }
-            
-            // For chain switching, handle it through the wallet client
-            if (args.method === 'wallet_switchEthereumChain') {
-              // Let the wallet handle chain switching
-              if (typeof (client as any).request === 'function') {
-                return (client as any).request(args);
-              }
-              // If client doesn't support it, try window.ethereum
-              if (typeof window !== 'undefined' && (window as any).ethereum) {
-                return (window as any).ethereum.request(args);
-              }
-              throw new Error("Chain switching not supported");
-            }
-            
-            // For other requests, use the client's request method if available
-            if (typeof (client as any).request === 'function') {
-              return (client as any).request(args);
-            }
-            
-            // Fallback to transport if available
-            if ((client as any).transport && typeof (client as any).transport.request === 'function') {
-              return (client as any).transport.request(args);
-            }
-            
-            throw new Error(`Method ${args.method} not supported`);
-          },
-          // Add other EIP-1193 provider methods
-          on: () => {},
-          removeListener: () => {},
-          isMetaMask: (window as any).ethereum?.isMetaMask || false,
-          isCoinbaseWallet: (window as any).ethereum?.isCoinbaseWallet || false,
-        };
-        
-        try {
-          adapter = await createAdapterFromProvider({
-            provider: providerWrapper as any,
-          });
-          console.log("✅ Created adapter from provider wrapper");
-        } catch (adapterError: any) {
-          console.error("Failed to create adapter from provider wrapper:", adapterError);
-          throw new Error(`Failed to create adapter: ${adapterError.message}`);
-        }
-      }
       
       if (!adapter) {
         throw new Error("Unable to create adapter. Please ensure your wallet is connected and supports EIP-1193.");
