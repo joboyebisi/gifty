@@ -2,12 +2,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+// import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 
 // Native share utility
 async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: string, recipientEmail?: string, recipientPhone?: string) {
   const shareText = `🎁 You've received a gift!\n\nClaim it here: ${claimUrl}\n\nOr use claim code: ${claimCode}`;
-  
+
   // Try native Web Share API first
   if (navigator.share) {
     try {
@@ -21,10 +21,10 @@ async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: 
       // User cancelled or error - fall through to manual options
     }
   }
-  
+
   // Fallback: Show share options
   const shareOptions: string[] = [];
-  
+
   if (recipientHandle) {
     shareOptions.push(`Telegram: https://t.me/share/url?url=${encodeURIComponent(claimUrl)}&text=${encodeURIComponent(shareText)}`);
   }
@@ -35,7 +35,7 @@ async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: 
     shareOptions.push(`SMS: sms:${recipientPhone}?body=${encodeURIComponent(shareText)}`);
     shareOptions.push(`WhatsApp: https://wa.me/${recipientPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(shareText)}`);
   }
-  
+
   // Copy to clipboard as fallback
   if (navigator.clipboard) {
     await navigator.clipboard.writeText(claimUrl);
@@ -43,7 +43,7 @@ async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: 
   } else {
     prompt("Copy this gift link:", claimUrl);
   }
-  
+
   return false;
 }
 
@@ -51,8 +51,11 @@ async function shareGift(claimUrl: string, claimCode: string, recipientHandle?: 
 export default function GiftsPageClient() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { primaryWallet, user: dynamicUser } = useDynamicContext();
-  const isConnected = !!primaryWallet && !!dynamicUser;
+  // const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  // const isConnected = !!primaryWallet && !!dynamicUser;
+
+  const isConnected = true;
+
   const [action, setAction] = useState<"choose" | "send" | "bulk" | "claim" | "programmable">("choose");
 
   // Auto-navigate based on URL parameters from bot
@@ -60,7 +63,7 @@ export default function GiftsPageClient() {
     const recipients = searchParams.get("recipients");
     const amount = searchParams.get("amount");
     const from = searchParams.get("from");
-    
+
     if (from === "bot" && recipients) {
       // Bot is directing user to send gift
       setAction("send");
@@ -88,7 +91,7 @@ export default function GiftsPageClient() {
   return (
     <div className="tg-viewport max-w-md mx-auto px-4 py-4">
       <h2 className="text-2xl font-bold mb-6 text-center">🎁 Send or Claim Gifts</h2>
-      
+
       <div className="space-y-4 mb-6">
         <div className="tg-card p-6 text-center">
           <h3 className="text-lg font-semibold mb-2">Send a Gift</h3>
@@ -150,10 +153,15 @@ export default function GiftsPageClient() {
 
 // Send Gift Flow Component
 function SendGiftFlow({ onBack }: { onBack: () => void }) {
-  const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  // const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const searchParams = useSearchParams();
-  const address = primaryWallet?.address;
-  const isConnected = !!primaryWallet && !!dynamicUser;
+  // const address = primaryWallet?.address;
+  // const isConnected = !!primaryWallet && !!dynamicUser;
+
+  const address = "0x";
+  const isConnected = true;
+  const primaryWallet = { address: "0x" };
+
   const [smartAccountAddress, setSmartAccountAddress] = useState<string | null>(null);
   const [loadingSmartAccount, setLoadingSmartAccount] = useState(false);
   const [step, setStep] = useState<"recipient" | "amount" | "message" | "chains" | "review">("recipient");
@@ -179,52 +187,16 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
 
   // Get Circle Smart Account address for gasless transactions
   useEffect(() => {
-    async function getSmartAccountAddress() {
-      if (!primaryWallet?.address) {
-        setSmartAccountAddress(null);
-        return;
-      }
-
-      setLoadingSmartAccount(true);
-      try {
-        const clientKey = process.env.NEXT_PUBLIC_CIRCLE_CLIENT_KEY;
-        if (!clientKey) {
-          console.log("Circle Client Key not configured");
-          setSmartAccountAddress(null);
-          return;
-        }
-
-        // Wait a bit for Dynamic wallet to initialize
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        const dynamicWalletClient = await (primaryWallet as any).getWalletClient?.();
-        if (!dynamicWalletClient) {
-          console.log("Waiting for wallet client...");
-          setSmartAccountAddress(null);
-          return;
-        }
-
-        const { createCircleSmartAccountFromDynamic } = await import("../../lib/circle-smart-account");
-        const smartAccount = await createCircleSmartAccountFromDynamic(dynamicWalletClient);
-        setSmartAccountAddress(smartAccount.address);
-        console.log("✅ Circle Smart Account loaded for gift sending:", smartAccount.address);
-      } catch (err: any) {
-        console.error("Error loading Circle Smart Account:", err);
-        setSmartAccountAddress(null);
-      } finally {
-        setLoadingSmartAccount(false);
-      }
-    }
-
-    getSmartAccountAddress();
-  }, [primaryWallet?.address]);
+    // Disabled Dynamic wallet logic
+    setSmartAccountAddress(null);
+  }, []);
 
   // Prefill from URL params (from birthday page or other sources)
   useEffect(() => {
     const recipients = searchParams.get("recipients");
     const name = searchParams.get("name");
     const phoneNumber = searchParams.get("phoneNumber");
-    
+
     if (recipients) {
       // Check if it's an email or telegram handle
       if (recipients.includes("@") && !recipients.startsWith("@")) {
@@ -308,7 +280,7 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
     // Use Smart Account if available, otherwise fallback to primary wallet
     const senderWallet = smartAccountAddress || address;
     const walletType = smartAccountAddress ? "Circle Smart Account (Gasless)" : "Primary Wallet";
-    
+
     if (smartAccountAddress) {
       const confirm = window.confirm(
         `Using ${walletType}:\n${smartAccountAddress.slice(0, 6)}...${smartAccountAddress.slice(-4)}\n\n` +
@@ -564,9 +536,8 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
                 {messages.map((m, i) => (
                   <div
                     key={i}
-                    className={`p-3 border rounded-lg cursor-pointer text-sm ${
-                      selectedMessage === m ? "border-pink-500 bg-pink-50" : "border-gray-200"
-                    }`}
+                    className={`p-3 border rounded-lg cursor-pointer text-sm ${selectedMessage === m ? "border-pink-500 bg-pink-50" : "border-gray-200"
+                      }`}
                     onClick={() => setSelectedMessage(m)}
                   >
                     {m}
@@ -610,7 +581,7 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
       {step === "review" && (
         <div className="tg-card p-6 space-y-4">
           <h3 className="text-lg font-semibold mb-4">Review Your Gift</h3>
-          
+
           <div className="space-y-3 text-sm">
             <div>
               <span className="text-gray-600">Recipient:</span>
@@ -632,42 +603,7 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
             </div>
           </div>
 
-          {!isConnected && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-              <p className="text-xs text-yellow-800 mb-2">Connect your wallet to fund the escrow</p>
-              <Link href="/" className="tg-button-primary text-center block text-xs">Connect Wallet</Link>
-            </div>
-          )}
-
-          {/* Wallet Selection Info */}
-          {isConnected && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <div className="flex items-start gap-2">
-                <div className="text-blue-600 text-sm">⚡</div>
-                <div className="flex-1">
-                  <p className="text-xs font-semibold text-blue-800 mb-1">
-                    Using Circle Smart Account (Gasless)
-                  </p>
-                  {loadingSmartAccount ? (
-                    <p className="text-xs text-blue-600">Loading Smart Account...</p>
-                  ) : smartAccountAddress ? (
-                    <div>
-                      <p className="text-xs text-blue-700 mb-1">
-                        Smart Account: <span className="font-mono text-xs">{smartAccountAddress.slice(0, 6)}...{smartAccountAddress.slice(-4)}</span>
-                      </p>
-                      <p className="text-xs text-blue-600">
-                        ⚠️ Ensure you have sufficient USDC in your Smart Account. Transactions are gasless!
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-blue-600">
-                      ⚠️ Smart Account not available. Will use Primary Wallet: <span className="font-mono">{address?.slice(0, 6)}...{address?.slice(-4)}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Info about wallet wallet */}
 
           <div className="flex gap-2">
             <button onClick={() => setStep("message")} className="tg-button-secondary flex-1">
@@ -678,10 +614,10 @@ function SendGiftFlow({ onBack }: { onBack: () => void }) {
               disabled={loading || !isConnected || (loadingSmartAccount && !smartAccountAddress)}
               className="tg-button-primary flex-1"
             >
-              {loading ? "Creating & Escrowing..." : 
-               loadingSmartAccount ? "⏳ Loading Smart Account..." :
-               smartAccountAddress ? "⚡ Create Gift (Gasless)" : 
-               "🎁 Create Gift"}
+              {loading ? "Creating & Escrowing..." :
+                loadingSmartAccount ? "⏳ Loading Smart Account..." :
+                  smartAccountAddress ? "⚡ Create Gift (Gasless)" :
+                    "🎁 Create Gift"}
             </button>
           </div>
         </div>
@@ -742,7 +678,7 @@ function ClaimGiftFlow({ onBack }: { onBack: () => void }) {
 // Bulk Gift Flow Component - Redirects to dedicated bulk page
 function BulkGiftFlow({ onBack }: { onBack: () => void }) {
   const router = useRouter();
-  
+
   useEffect(() => {
     // Redirect to dedicated bulk gift page
     router.push("/team/bulk");
