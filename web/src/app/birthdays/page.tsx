@@ -150,10 +150,8 @@ export default function BirthdaysPage() {
         }
       }
 
-      // Include Dynamic user email if available (for auto-verification)
-      if (dynamicUser?.email) {
-        queryParams.set("email", dynamicUser.email);
-      }
+      // REMOVED Dynamic user email logic
+      // if (dynamicUser?.email) { ... }
 
       fetch(`${API}/api/users/me?${queryParams.toString()}`)
         .then((res) => {
@@ -193,7 +191,7 @@ export default function BirthdaysPage() {
       if (address) queryParams.set("walletAddress", address);
       if (user.telegramUserId) queryParams.set("userId", user.telegramUserId);
       if (user.telegramHandle) queryParams.set("telegramHandle", user.telegramHandle);
-      if (dynamicUser?.email) queryParams.set("email", dynamicUser.email);
+      // Removed dynamicUser email usage
 
       console.log("🔍 Fetching birthdays with params:", queryParams.toString());
 
@@ -233,7 +231,7 @@ export default function BirthdaysPage() {
     } else if (!showOnboarding) {
       setLoading(false);
     }
-  }, [user, showOnboarding, address, dynamicUser?.email, API]);
+  }, [user, showOnboarding, address, API]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -613,8 +611,8 @@ export default function BirthdaysPage() {
                             toggleSelect(b.id);
                           }}
                           className={`text-xs px-3 py-1 rounded ${isSelected
-                              ? "bg-blue-100 text-blue-700 border border-blue-300"
-                              : "bg-gray-100 text-gray-700 border border-gray-300"
+                            ? "bg-blue-100 text-blue-700 border border-blue-300"
+                            : "bg-gray-100 text-gray-700 border border-gray-300"
                             }`}
                         >
                           {isSelected ? "✓" : "Select"}
@@ -645,8 +643,8 @@ export default function BirthdaysPage() {
                     onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
                     className={`text-xs px-3 py-1 rounded border ${currentPage === 1
-                        ? "bg-gray-100 text-gray-400 border-gray-200"
-                        : "bg-white text-gray-700 border-gray-300"
+                      ? "bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white text-gray-700 border-gray-300"
                       }`}
                   >
                     ← Previous
@@ -658,8 +656,8 @@ export default function BirthdaysPage() {
                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
                     className={`text-xs px-3 py-1 rounded border ${currentPage === totalPages
-                        ? "bg-gray-100 text-gray-400 border-gray-200"
-                        : "bg-white text-gray-700 border-gray-300"
+                      ? "bg-gray-100 text-gray-400 border-gray-200"
+                      : "bg-white text-gray-700 border-gray-300"
                       }`}
                   >
                     Next →
