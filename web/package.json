@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "set NEXT_DISABLE_DEVTOOLS=1&& next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "postinstall": "node scripts/apply-source-map-shim.cjs"
   },
