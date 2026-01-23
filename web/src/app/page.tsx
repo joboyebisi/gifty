@@ -39,8 +39,9 @@ export default function HomePage() {
         <p className="text-xs text-gray-400">Securely login with Google. No seed phrases required.</p>
       </div>
 
-      <div className="mb-4">
-        <SwapInterface />
+      <div className="mb-4 text-center">
+        {/* <SwapInterface /> */}
+        <p className="text-sm text-gray-500">Swap feature coming soon for Circle Wallets</p>
       </div>
 
       <div className="mb-4">

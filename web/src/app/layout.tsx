@@ -14,9 +14,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning className="relative">
         <Providers>
-          <Suspense fallback={null}>
-            <TelegramAuth />
-          </Suspense>
           <div className="relative z-10">{children}</div>
         </Providers>
       </body>
