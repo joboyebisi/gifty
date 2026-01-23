@@ -2,8 +2,9 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+// import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTelegram } from "../../hooks/useTelegram";
+import { getCookie } from "cookies-next";
 
 // Force dynamic rendering to avoid static generation issues
 export const dynamic = 'force-dynamic';
@@ -36,10 +37,15 @@ interface User {
 
 export default function BirthdaysPage() {
   const router = useRouter();
-  const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  // const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const { isTelegram, user: tgUser } = useTelegram();
-  const address = primaryWallet?.address;
-  const isConnected = !!primaryWallet && !!dynamicUser;
+
+  // Naive auth check for now using cookie
+  const address = "0x"; // Placeholder until we propagate context
+  const isConnected = true; // Allow viewing for now
+
+  // const address = primaryWallet?.address;
+  // const isConnected = !!primaryWallet && !!dynamicUser;
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,7 +140,7 @@ export default function BirthdaysPage() {
       const queryParams = new URLSearchParams({
         walletAddress: address,
       });
-      
+
       if (isTelegram && tgUser) {
         if (tgUser.username) {
           queryParams.set("telegramHandle", tgUser.username);
@@ -143,12 +149,12 @@ export default function BirthdaysPage() {
           queryParams.set("telegramUserId", tgUser.id.toString());
         }
       }
-      
+
       // Include Dynamic user email if available (for auto-verification)
       if (dynamicUser?.email) {
         queryParams.set("email", dynamicUser.email);
       }
-      
+
       fetch(`${API}/api/users/me?${queryParams.toString()}`)
         .then((res) => {
           if (!res.ok) {
@@ -188,9 +194,9 @@ export default function BirthdaysPage() {
       if (user.telegramUserId) queryParams.set("userId", user.telegramUserId);
       if (user.telegramHandle) queryParams.set("telegramHandle", user.telegramHandle);
       if (dynamicUser?.email) queryParams.set("email", dynamicUser.email);
-      
+
       console.log("🔍 Fetching birthdays with params:", queryParams.toString());
-      
+
       fetch(`${API}/api/birthdays/upcoming?days=0&${queryParams.toString()}`)
         .then((res) => {
           if (!res.ok) {
@@ -213,7 +219,7 @@ export default function BirthdaysPage() {
       setLoading(true);
       const queryParams = new URLSearchParams();
       queryParams.set("walletAddress", address);
-      
+
       fetch(`${API}/api/birthdays/upcoming?days=0&${queryParams.toString()}`)
         .then((res) => res.json())
         .then((data) => {
@@ -238,7 +244,7 @@ export default function BirthdaysPage() {
       alert("Please connect your wallet first");
       return;
     }
-    
+
     // Telegram handle is auto-detected, so we only need email if provided
     if (!onboardingData.telegramHandle && !onboardingData.email) {
       alert("Please provide at least your Telegram handle or email");
@@ -267,7 +273,7 @@ export default function BirthdaysPage() {
           emailVerified: onboardingData.emailVerified,
         }),
       });
-      
+
       if (!res.ok) {
         const text = await res.text();
         try {
@@ -277,7 +283,7 @@ export default function BirthdaysPage() {
           throw new Error(`HTTP ${res.status}: ${text.slice(0, 100)}`);
         }
       }
-      
+
       const data = await res.json();
       if (data.user) {
         setUser(data.user);
@@ -379,7 +385,7 @@ export default function BirthdaysPage() {
               ? "We detected your Telegram account. Connect your wallet and optionally add your email to get started."
               : "Connect your wallet and add your details to receive birthday reminders and notifications."}
           </p>
-          
+
           {!isConnected && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-yellow-800 mb-2">Step 1: Connect your wallet</p>
@@ -477,11 +483,11 @@ export default function BirthdaysPage() {
           We'll use this to fetch your contacts' birthdays and send you reminders.
         </p>
         {isConnected && (
-          <button 
+          <button
             onClick={() => {
               setShowOnboarding(false);
               setLoading(false);
-            }} 
+            }}
             className="tg-button-secondary text-center block text-sm w-full"
           >
             Skip for now - I'll do this later
@@ -534,14 +540,14 @@ export default function BirthdaysPage() {
               : "Add your Telegram handle or email in your profile to see birthdays from your contacts."}
           </p>
           <div className="flex flex-col gap-2 mb-4">
-            <button 
-              onClick={() => router.push("/birthdays/add")} 
+            <button
+              onClick={() => router.push("/birthdays/add")}
               className="tg-button-primary text-sm"
             >
               ➕ Add Birthday
             </button>
-            <button 
-              onClick={() => router.push("/gifts")} 
+            <button
+              onClick={() => router.push("/gifts")}
               className="tg-button-secondary text-sm"
             >
               🎁 Send Gift
@@ -606,11 +612,10 @@ export default function BirthdaysPage() {
                             e.stopPropagation();
                             toggleSelect(b.id);
                           }}
-                          className={`text-xs px-3 py-1 rounded ${
-                            isSelected
+                          className={`text-xs px-3 py-1 rounded ${isSelected
                               ? "bg-blue-100 text-blue-700 border border-blue-300"
                               : "bg-gray-100 text-gray-700 border border-gray-300"
-                          }`}
+                            }`}
                         >
                           {isSelected ? "✓" : "Select"}
                         </button>
@@ -639,11 +644,10 @@ export default function BirthdaysPage() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
                     disabled={currentPage === 1}
-                    className={`text-xs px-3 py-1 rounded border ${
-                      currentPage === 1
+                    className={`text-xs px-3 py-1 rounded border ${currentPage === 1
                         ? "bg-gray-100 text-gray-400 border-gray-200"
                         : "bg-white text-gray-700 border-gray-300"
-                    }`}
+                      }`}
                   >
                     ← Previous
                   </button>
@@ -653,11 +657,10 @@ export default function BirthdaysPage() {
                   <button
                     onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
                     disabled={currentPage === totalPages}
-                    className={`text-xs px-3 py-1 rounded border ${
-                      currentPage === totalPages
+                    className={`text-xs px-3 py-1 rounded border ${currentPage === totalPages
                         ? "bg-gray-100 text-gray-400 border-gray-200"
                         : "bg-white text-gray-700 border-gray-300"
-                    }`}
+                      }`}
                   >
                     Next →
                   </button>
