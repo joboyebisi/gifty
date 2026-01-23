@@ -12,6 +12,7 @@ const schema = z.object({
   GROQ_API_KEY: z.string().optional(),
   PPLX_API_KEY: z.string().optional(),
   GROK_API_KEY: z.string().optional(),
+  DEEPSEEK_API_KEY: z.string().optional(),
   LLAMA_API_URL: z.string().url().optional(),
   LLAMA_API_KEY: z.string().optional(),
   SUPABASE_URL: z.string().url().optional(),

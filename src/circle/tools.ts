@@ -36,7 +36,7 @@ export class CircleTools {
                 throw new Error(`Failed to fetch balance: ${response.statusText}`);
             }
 
-            const data = await response.json();
+            const data = await response.json() as any;
             const balances = data.data?.tokenBalances || [];
 
             // Sum up USDC balances

@@ -18,7 +18,7 @@ export class DeepSeekProvider {
 
     constructor(config?: DeepSeekConfig) {
         const env = loadEnv();
-        this.apiKey = config?.apiKey || env.DEEPSEEK_API_KEY || "";
+        this.apiKey = config?.apiKey || (env as any).DEEPSEEK_API_KEY || "";
         this.baseUrl = config?.baseUrl || "https://api.deepseek.com/v1";
         this.model = config?.model || "deepseek-chat";
 
@@ -54,7 +54,7 @@ export class DeepSeekProvider {
                 throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
             }
 
-            const data = await response.json();
+            const data = await response.json() as any;
             return data.choices?.[0]?.message?.content || "";
         } catch (error) {
             console.error("DeepSeek completion failed:", error);

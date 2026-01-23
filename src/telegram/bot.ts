@@ -117,4 +117,24 @@ export class TelegramBot {
   public getBotInstance() {
     return this.bot;
   }
+
+  // Wrapper for sendMessage to fix build errors in handlers.ts
+  public async sendMessage(chatId: string | number, text: string, options?: any) {
+    return this.bot.api.sendMessage(chatId, text, options);
+  }
+
+  // Wrapper for answerCallbackQuery to fix build errors in handlers.ts
+  public async answerCallbackQuery(callbackQueryId: string, text?: string, showAlert: boolean = false) {
+    return this.bot.api.answerCallbackQuery(callbackQueryId, { text, show_alert: showAlert });
+  }
+}
+
+// Webhook helper
+export async function handleBotCommand(update: any) {
+  const bot = new TelegramBot();
+  const grammyBot = bot.getBotInstance();
+
+  // Initialize context for the update (Grammy handles this internally via handleUpdate)
+  // Note: This creates a new bot instance per request which is inefficient but functional for now.
+  await grammyBot.handleUpdate(update);
 }

@@ -52,3 +52,13 @@ export async function isMentioned(ctx: Context): Promise<boolean> {
 
   return false;
 }
+
+// Webhook helper for group mentions
+export async function handleGroupMention(update: any) {
+  // Ideally this should reuse logic from bot.ts or be part of a unified handler
+  const { TelegramBot } = await import("./bot");
+  const bot = new TelegramBot();
+  const grammyBot = bot.getBotInstance();
+
+  await grammyBot.handleUpdate(update);
+}
