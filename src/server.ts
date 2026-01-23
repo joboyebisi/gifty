@@ -27,7 +27,7 @@ const corsOptions = {
       "http://localhost:3000",
       "https://localhost:3000",
     ].filter(Boolean);
-    
+
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -48,8 +48,8 @@ app.use(express.json());
 
 // Root route
 app.get("/", (_req: any, res: any) => {
-  res.json({ 
-    message: "Gifty API", 
+  res.json({
+    message: "Gifty API",
     status: "running",
     endpoints: {
       health: "/healthz",
@@ -66,37 +66,37 @@ app.get("/healthz", (_req: any, res: any) => {
 app.post("/api/ai/persona", async (req: any, res: any) => {
   try {
     const { snippets, stats, locale, provider, recipientHandle } = (req as any).body || {};
-    
+
     console.log(`\n🤖 [PERSONA] Request received:`);
     console.log(`   Provider: ${provider || "default"}`);
     console.log(`   Snippets count: ${snippets?.length || 0}`);
     console.log(`   Recipient: ${recipientHandle || "N/A"}`);
-    
+
     if (!Array.isArray(snippets) || snippets.length === 0) {
       console.error("❌ [PERSONA] Validation failed: snippets required");
       return res.status(400).json({ error: "snippets required" });
     }
-    
+
     // Check environment variables
     const env = loadEnv();
     const hasGemini = !!env.GEMINI_API_KEY;
     const hasGroq = !!env.GROQ_API_KEY;
     console.log(`   Environment check: GEMINI_API_KEY=${hasGemini ? "✅" : "❌"}, GROQ_API_KEY=${hasGroq ? "✅" : "❌"}`);
-    
+
     console.log(`🤖 [PERSONA] Generating persona with provider: ${provider || "default"}`);
     const persona = await generatePersona({ snippets, stats: stats || {}, locale }, { provider });
-    
+
     if (!persona || !persona.trim()) {
       console.error("❌ [PERSONA] Persona generation returned empty result");
       console.error("   Check AI API keys in Railway environment variables");
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: "Persona generation returned empty result. Please check API keys.",
         details: `Missing: ${!hasGemini && !hasGroq ? "GEMINI_API_KEY or GROQ_API_KEY" : !hasGemini ? "GEMINI_API_KEY" : "GROQ_API_KEY"}`
       });
     }
-    
+
     console.log(`✅ [PERSONA] Generated persona (${persona.length} chars)`);
-    
+
     if (recipientHandle) {
       try {
         await savePersonaSnapshot(recipientHandle, persona, provider || "auto");
@@ -105,25 +105,25 @@ app.post("/api/ai/persona", async (req: any, res: any) => {
         // Don't fail the request if saving fails
       }
     }
-    
+
     res.json({ persona });
   } catch (err: any) {
     console.error("❌ [PERSONA] Error generating persona:", err);
     console.error("   Error name:", err?.name);
     console.error("   Error message:", err?.message);
     console.error("   Error stack:", err?.stack?.slice(0, 500));
-    
+
     const errorMessage = err?.message || "failed";
-    
+
     // Provide helpful error messages
     if (errorMessage.includes("API_KEY") || errorMessage.includes("missing")) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in Railway environment variables.`,
         details: err.message
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: errorMessage,
       details: err?.stack?.slice(0, 200) || "No additional details"
     });
@@ -133,41 +133,41 @@ app.post("/api/ai/persona", async (req: any, res: any) => {
 app.post("/api/ai/messages", async (req: any, res: any) => {
   try {
     const { persona, relationship, constraints, provider, giftId, recipientHandle } = (req as any).body || {};
-    
+
     console.log(`\n🤖 [MESSAGES] Request received:`);
     console.log(`   Provider: ${provider || "default"}`);
     console.log(`   Persona length: ${persona?.length || 0}`);
     console.log(`   Gift ID: ${giftId || "N/A"}`);
     console.log(`   Recipient: ${recipientHandle || "N/A"}`);
-    
+
     if (typeof persona !== "string" || !persona.trim()) {
       console.error("❌ [MESSAGES] Validation failed: persona required");
       return res.status(400).json({ error: "persona required" });
     }
-    
+
     // Check environment variables
     const env = loadEnv();
     const hasGemini = !!env.GEMINI_API_KEY;
     const hasGroq = !!env.GROQ_API_KEY;
     console.log(`   Environment check: GEMINI_API_KEY=${hasGemini ? "✅" : "❌"}, GROQ_API_KEY=${hasGroq ? "✅" : "❌"}`);
-    
+
     const rel = relationship || {};
     const cons = constraints || {};
-    
+
     console.log(`🤖 [MESSAGES] Generating messages with provider: ${provider || "default"}`);
     const out = await generateBirthdayMessages(persona, rel, cons, { provider });
-    
+
     if (!out.messages || out.messages.length === 0) {
       console.error("❌ [MESSAGES] Message generation returned no messages");
       console.error("   Check AI API keys in Railway environment variables");
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: "Message generation returned no messages. Please check API keys and try again.",
         details: `Missing: ${!hasGemini && !hasGroq ? "GEMINI_API_KEY or GROQ_API_KEY" : !hasGemini ? "GEMINI_API_KEY" : "GROQ_API_KEY"}`
       });
     }
-    
+
     console.log(`✅ [MESSAGES] Generated ${out.messages.length} messages`);
-    
+
     // Save messages if giftId provided
     if (giftId) {
       try {
@@ -177,7 +177,7 @@ app.post("/api/ai/messages", async (req: any, res: any) => {
         // Don't fail the request if saving fails
       }
     }
-    
+
     // Save persona snapshot if recipientHandle provided
     if (recipientHandle) {
       try {
@@ -187,28 +187,95 @@ app.post("/api/ai/messages", async (req: any, res: any) => {
         // Don't fail the request if saving fails
       }
     }
-    
+
     res.json(out);
   } catch (err: any) {
     console.error("❌ [MESSAGES] Error generating messages:", err);
     console.error("   Error name:", err?.name);
     console.error("   Error message:", err?.message);
     console.error("   Error stack:", err?.stack?.slice(0, 500));
-    
+
     const errorMessage = err?.message || "failed";
-    
+
     // Provide helpful error messages
     if (errorMessage.includes("API_KEY") || errorMessage.includes("missing")) {
-      return res.status(500).json({ 
+      return res.status(500).json({
         error: `API key missing. Please configure ${err.message.includes("GEMINI") ? "GEMINI_API_KEY" : err.message.includes("GROQ") ? "GROQ_API_KEY" : "AI provider API key"} in Railway environment variables.`,
         details: err.message
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       error: errorMessage,
       details: err?.stack?.slice(0, 200) || "No additional details"
     });
+  }
+});
+
+// Web Chat Endpoint (Connects Frontend to AgentBus)
+app.post("/api/ai/chat", async (req: any, res: any) => {
+  try {
+    const { message, userId, chatId } = req.body;
+
+    // In a real app, we'd authenticate the user here via session token
+    if (!message) {
+      return res.status(400).json({ error: "Message required" });
+    }
+
+    console.log(`[WebChat] Received: "${message}" from user ${userId}`);
+
+    // Import AgentBus and Types locally to avoid circular dependency issues at top level if any
+    const { AgentBus, AgentType } = await import("./ai/agents/AgentBus");
+    const bus = AgentBus.getInstance();
+
+    // Generate a unique ID for this request
+    const requestId = crypto.randomUUID();
+
+    // We need a way to get the response back synchronously for HTTP response
+    // For this prototype, we'll listen for a specific event or just return "Processed"
+    // Ideally, CoordinatorAgent should return a response we can await, or we use a Promise wrapper
+
+    // Simple Promise wrapper to wait for response
+    const agentResponse = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        resolve({ type: "timeout", payload: { text: "The agents are busy and didn't reply in time." } });
+      }, 10000); // 10s timeout
+
+      // Listen for all messages and filter (Naive approach for prototype)
+      // In prod, use a correlation ID
+      const listener = (msg: any) => {
+        // Check if this message is a reply to our context (chatId)
+        // Ideally AgentMessage should have 'correlationId' or 'replyTo'
+        if (msg.payload?.chatId === chatId && msg.type !== "user_message") {
+          clearTimeout(timeout);
+          bus.off("message:all", listener);
+          resolve(msg);
+        }
+      };
+      bus.on("message:all", listener);
+
+      // Send message to Coordinator
+      bus.publish({
+        id: requestId,
+        from: AgentType.COORDINATOR, // Masquerade as Coordinator proxy
+        to: AgentType.COORDINATOR,
+        type: "user_message",
+        timestamp: Date.now(),
+        payload: {
+          text: message,
+          chatId: chatId,
+          userId: userId || 0,
+          username: "WebUser",
+          isWeb: true // Flag to handle formatting differently if needed
+        }
+      });
+    });
+
+    res.json({ success: true, response: agentResponse });
+
+  } catch (err: any) {
+    console.error("Web Chat Error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -231,9 +298,9 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
     const senderBalances = await getChainBalances(senderWalletAddress, "5042002"); // Arc Testnet
     const senderUSDCBalance = parseFloat(senderBalances.usdc.balanceFormatted || "0");
     const requiredAmount = parseFloat(amountUsdc);
-    
+
     if (senderUSDCBalance < requiredAmount) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Insufficient balance. Required: ${requiredAmount} USDC, Available: ${senderUSDCBalance.toFixed(2)} USDC on Arc Testnet`,
         availableBalance: senderUSDCBalance,
         requiredAmount: requiredAmount,
@@ -262,7 +329,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
     // We'll handle this gracefully and allow gift creation without escrow for now
     try {
       const escrowManager = new EscrowManager();
-      
+
       // Create escrow wallet for this gift (on Sepolia - Circle requirement)
       console.log("🔐 Creating escrow wallet (each gift gets its own secure escrow wallet)...");
       const escrowWallet = await escrowManager.createEscrowWallet();
@@ -270,7 +337,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
       if (escrowWallet.address) {
         console.log(`✅ Escrow wallet address: ${escrowWallet.address}`);
       }
-      
+
       // Fund escrow from sender's wallet using CCTP
       // Transfer from sender's Arc wallet to escrow Sepolia wallet via CCTP
       // This ensures proper cross-chain settlement
@@ -282,7 +349,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
         "arc-testnet", // Sender wallet is on Arc
         "eth-sepolia" // Escrow wallet is on Sepolia (Circle requirement)
       );
-      
+
       const supabase = getSupabase();
       if (supabase) {
         await supabase.from("gifts").update({
@@ -290,7 +357,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
           transfer_status: fundResult.success ? "escrow_funded" : "escrow_pending",
         }).eq("id", gift.id);
       }
-      
+
       if (!fundResult.success) {
         throw new Error(fundResult.error || "Failed to fund escrow");
       }
@@ -315,14 +382,14 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
         fundingStatus: fundResult.success ? "funded" : "pending",
         fundingError: fundResult.error,
         transferId: fundResult.transferId,
-        message: fundResult.success 
+        message: fundResult.success
           ? `🎁 Gift created! ${amountUsdc} USDC transferred to escrow via CCTP. Each gift has its own secure escrow wallet. Recipient will receive funds on Arc Testnet when they claim.`
           : "Gift created but escrow funding pending. Recipient can claim once funds are available.",
       });
     } catch (escrowError: any) {
       console.error("❌ Escrow funding error:", escrowError);
       console.error("Error details:", escrowError.message, escrowError.stack);
-      
+
       // Gift created but escrow failed - mark as pending funding
       const supabase = getSupabase();
       if (supabase) {
@@ -330,7 +397,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
           transfer_status: "escrow_pending",
         }).eq("id", gift.id);
       }
-      
+
       // Generate deeplinks even if escrow failed
       const { generateSmartGiftLink } = await import("./utils/telegram-deeplink");
       const env = loadEnv();
@@ -340,7 +407,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
         botUsername: env.TELEGRAM_BOT_USERNAME,
         frontendUrl: env.FRONTEND_URL || "https://gifties-w3yr.vercel.app",
       });
-      
+
       // Return success with warning - gift is created, escrow can be funded later
       res.json({
         gift: { ...gift, transferStatus: "escrow_pending" },
@@ -358,7 +425,7 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
     console.error("   Error name:", err?.name);
     console.error("   Error message:", err?.message);
     console.error("   Error stack:", err?.stack?.slice(0, 500));
-    res.status(500).json({ 
+    res.status(500).json({
       error: err?.message || "failed",
       details: err?.stack?.slice(0, 200) || "No additional details"
     });
@@ -369,17 +436,17 @@ app.post("/api/gifts/create", async (req: any, res: any) => {
 app.get("/api/gifts/recipient", async (req: any, res: any) => {
   try {
     const { telegramUserId, telegramHandle } = req.query;
-    
+
     if (!telegramUserId && !telegramHandle) {
       return res.status(400).json({ error: "telegramUserId or telegramHandle required" });
     }
-    
+
     const { getGiftsForRecipient } = await import("./gifts/gifts");
     const gifts = await getGiftsForRecipient(
       telegramUserId as string | undefined,
       telegramHandle as string | undefined
     );
-    
+
     res.json({ gifts });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || "failed" });
@@ -402,7 +469,7 @@ app.get("/api/gifts/claim/:code", async (req: any, res: any) => {
       const { data: dbGift } = await sb.from("gifts").select("claim_secret_hash").eq("claim_code", code).single();
       requiresSecret = !!dbGift?.claim_secret_hash;
     }
-    
+
     // Don't return secret or secret hash
     const { claimSecret, ...giftWithoutSecret } = gift as any;
     res.json({ gift: giftWithoutSecret, requiresSecret });
@@ -442,7 +509,7 @@ app.post("/api/gifts/:id/appreciate", async (req: any, res: any) => {
     // Get recipient user by wallet address
     const { getUserByWallet } = await import("./users/users");
     const recipientUser = await getUserByWallet(walletAddress);
-    
+
     if (!recipientUser || !recipientUser.id) {
       return res.status(404).json({ error: "Recipient user not found. Please ensure you've claimed the gift first." });
     }
@@ -586,9 +653,9 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
     if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress required" });
     }
-    
+
     console.log(`🎁 Claiming gift: ${code} for wallet ${walletAddress.slice(0, 10)}...`);
-    
+
     // Verify gift and secret
     const gift = await getGiftByClaimCode(code, secret);
     if (!gift) {
@@ -616,7 +683,7 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
           claimed_at: new Date().toISOString(),
         }).eq("id", gift.id);
       }
-      
+
       return res.json({
         success: true,
         gift: { ...gift, status: "claimed" },
@@ -627,7 +694,7 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
 
     if (gift.transferStatus !== "escrow_funded") {
       console.warn(`⚠️ Gift escrow status: ${gift.transferStatus}`);
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Gift escrow status: ${gift.transferStatus}. Funds may not be available yet.`,
         status: gift.transferStatus,
       });
@@ -677,7 +744,7 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
     } catch (circleError: any) {
       console.error("❌ Circle transfer error:", circleError);
       console.error("Error details:", circleError.message, circleError.stack);
-      
+
       // Update gift status even if transfer fails (user can retry)
       const supabase = getSupabase();
       if (supabase) {
@@ -688,7 +755,7 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
           transfer_status: "failed",
         }).eq("id", gift.id);
       }
-      
+
       res.status(500).json({
         error: "Failed to transfer from escrow",
         details: circleError.message,
@@ -706,7 +773,7 @@ app.post("/api/gifts/claim/:code/execute", async (req: any, res: any) => {
 app.post("/api/ai/generate-thank-you", async (req: any, res: any) => {
   try {
     const { giftAmount, senderMessage, recipientHandle } = req.body;
-    
+
     const prompt = `Generate a warm, personalized thank you message for receiving a gift of ${giftAmount} USDC. 
 ${senderMessage ? `The sender included this message: "${senderMessage}"` : ""}
 Make it genuine, appreciative, and not too long (2-3 sentences).`;
@@ -714,9 +781,9 @@ Make it genuine, appreciative, and not too long (2-3 sentences).`;
     // Use a simple AI generation approach - call the provider directly
     const { loadEnv } = await import("./config/env");
     const env = loadEnv();
-    
+
     let message = "Thank you so much for the gift! I really appreciate your generosity.";
-    
+
     try {
       // Try to generate with AI if API keys are available
       if (env.GEMINI_API_KEY) {
@@ -730,7 +797,7 @@ Make it genuine, appreciative, and not too long (2-3 sentences).`;
             }]
           }),
         });
-        
+
         if (response.ok) {
           const data = await response.json() as any;
           if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
@@ -741,7 +808,7 @@ Make it genuine, appreciative, and not too long (2-3 sentences).`;
     } catch (err) {
       console.error("Failed to generate AI thank you, using default:", err);
     }
-    
+
     res.json({ message });
   } catch (err: any) {
     console.error("Error generating thank you:", err);
@@ -754,7 +821,7 @@ app.post("/api/gifts/:id/thank-you", async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { message, senderWalletAddress } = req.body;
-    
+
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
@@ -790,11 +857,11 @@ app.post("/api/gifts/:id/thank-you", async (req: any, res: any) => {
       try {
         const { TelegramBot } = await import("./telegram/bot");
         const bot = new TelegramBot();
-        
-        const telegramUserId = gift.sender.telegram_user_id 
+
+        const telegramUserId = gift.sender.telegram_user_id
           ? Number(gift.sender.telegram_user_id)
           : null;
-        
+
         if (telegramUserId) {
           const thankYouText = `💌 You received a thank you message for your gift!\n\n"${message}"`;
           await bot.sendMessage(telegramUserId, thankYouText);
@@ -822,19 +889,19 @@ app.get("/api/birthdays/upcoming", async (req: any, res: any) => {
     const userId = req.query.userId;
     const walletAddress = req.query.walletAddress;
     const telegramHandle = req.query.telegramHandle;
-    
+
     console.log(`🔍 [BIRTHDAYS/API] Fetching upcoming birthdays:`, {
       days,
       userId,
       walletAddress: walletAddress?.slice(0, 10) + "...",
       telegramHandle,
     });
-    
+
     // Get user's birthdays (filtered by user)
     const birthdays = await getUpcomingBirthdays(days, userId, walletAddress, telegramHandle);
-    
+
     console.log(`✅ [BIRTHDAYS/API] Found ${birthdays.length} upcoming birthdays`);
-    
+
     res.json({ birthdays });
   } catch (err: any) {
     console.error("❌ [BIRTHDAYS/API] Error fetching upcoming birthdays:", err);
@@ -847,14 +914,14 @@ app.get("/api/birthdays/upcoming", async (req: any, res: any) => {
 app.get("/api/birthdays", async (req: any, res: any) => {
   try {
     const { userId, telegramHandle, walletAddress } = req.query;
-    
+
     const sb = getSupabase();
     if (!sb) {
       return res.status(500).json({ error: "Database not configured" });
     }
 
     let query = sb.from("birthdays").select("*");
-    
+
     // Filter by user identifier
     if (userId) {
       query = query.eq("user_id", userId);
@@ -910,7 +977,7 @@ app.post("/api/birthdays", async (req: any, res: any) => {
     if (!telegramHandle && !email && !name && !phoneNumber) {
       return res.status(400).json({ error: "telegramHandle, email, name, or phoneNumber required" });
     }
-    
+
     // Update birthday creation to include phoneNumber
     // Also link to user by walletAddress if provided
     const sb = getSupabase();
@@ -923,7 +990,7 @@ app.post("/api/birthdays", async (req: any, res: any) => {
     if (!finalUserId && req.body.walletAddress) {
       const { getUserByWallet, createOrUpdateUser } = await import("./users/users");
       let user = await getUserByWallet(req.body.walletAddress);
-      
+
       // If user doesn't exist, create them (auto-create user account)
       if (!user) {
         console.log(`🔍 [BIRTHDAYS] User not found for wallet ${req.body.walletAddress.slice(0, 10)}..., creating user...`);
@@ -939,13 +1006,13 @@ app.post("/api/birthdays", async (req: any, res: any) => {
           // Continue anyway - birthday can still be created without user link
         }
       }
-      
+
       if (user?.telegramUserId) {
         finalUserId = user.telegramUserId;
       } else if (user?.id) {
         finalUserId = user.id;
       }
-      
+
       // Log for debugging
       if (finalUserId) {
         console.log(`✅ [BIRTHDAYS] Birthday will be linked to user_id: ${finalUserId}`);
@@ -999,7 +1066,7 @@ app.put("/api/birthdays/:id", async (req: any, res: any) => {
   try {
     const { id } = req.params;
     const { month, day, year, telegramHandle, email, name, visibility } = (req as any).body || {};
-    
+
     const sb = getSupabase();
     if (!sb) {
       return res.status(500).json({ error: "Database not configured" });
@@ -1049,7 +1116,7 @@ app.put("/api/birthdays/:id", async (req: any, res: any) => {
 app.delete("/api/birthdays/:id", async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    
+
     const sb = getSupabase();
     if (!sb) {
       return res.status(500).json({ error: "Database not configured" });
@@ -1071,7 +1138,7 @@ app.delete("/api/birthdays/:id", async (req: any, res: any) => {
 app.post("/api/birthdays/gift-link", async (req: any, res: any) => {
   try {
     const { userId, telegramHandle, email, walletAddress } = (req as any).body || {};
-    
+
     if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress required" });
     }
@@ -1091,17 +1158,17 @@ app.post("/api/birthdays/gift-link", async (req: any, res: any) => {
       .from("birthdays")
       .select("*")
       .or(
-        userId ? `user_id.eq.${userId}` : 
-        telegramHandle ? `telegram_handle.eq.${telegramHandle}` :
-        email ? `email.eq.${email}` : "id.eq.null"
+        userId ? `user_id.eq.${userId}` :
+          telegramHandle ? `telegram_handle.eq.${telegramHandle}` :
+            email ? `email.eq.${email}` : "id.eq.null"
       )
       .eq("month", month)
       .eq("day", day)
       .maybeSingle();
 
     if (!birthday) {
-      return res.status(404).json({ 
-        error: "No birthday found for today. Gift links are only available on your birthday!" 
+      return res.status(404).json({
+        error: "No birthday found for today. Gift links are only available on your birthday!"
       });
     }
 
@@ -1130,13 +1197,13 @@ app.get("/api/users/me", async (req: any, res: any) => {
     const walletAddress = req.query.walletAddress;
     const telegramHandle = req.query.telegramHandle;
     const telegramUserId = req.query.telegramUserId;
-    
+
     if (!walletAddress) {
       return res.json({ user: null });
     }
-    
+
     let user = await getUserByWallet(walletAddress);
-    
+
     // Auto-create account if user doesn't exist
     if (!user) {
       console.log(`📝 Auto-creating account for wallet: ${walletAddress.slice(0, 6)}...`);
@@ -1155,7 +1222,7 @@ app.get("/api/users/me", async (req: any, res: any) => {
         });
       }
     }
-    
+
     res.json({ user: user || null });
   } catch (err: any) {
     console.error("Error in /api/users/me:", err);
@@ -1167,7 +1234,7 @@ app.get("/api/users/me", async (req: any, res: any) => {
 app.post("/api/users/sync", async (req: any, res: any) => {
   try {
     const { walletAddress, telegramHandle, telegramUserId, email } = (req as any).body || {};
-    
+
     if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress required" });
     }
@@ -1229,10 +1296,10 @@ app.post("/api/users", async (req: any, res: any) => {
     if (!walletAddress && !telegramHandle && !email) {
       return res.status(400).json({ error: "At least one identifier required" });
     }
-    
+
     // Only save email if verified
     const emailToSave = emailVerified === true ? email : undefined;
-    
+
     const user = await createOrUpdateUser({ walletAddress, telegramHandle, email: emailToSave, telegramUserId, circleWalletId });
     res.json({ user });
   } catch (err: any) {
@@ -1250,10 +1317,10 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
     }
 
     const { getUserByTelegramId, getUserByWallet, createOrUpdateUser } = await import("./users/users");
-    let user = telegramUserId 
+    let user = telegramUserId
       ? await getUserByTelegramId(telegramUserId as string)
       : await getUserByWallet(walletAddress as string);
-    
+
     // Auto-create user if doesn't exist (similar to /api/users/me)
     if (!user && walletAddress) {
       console.log(`📝 Auto-creating account for wallet balance check: ${walletAddress.slice(0, 6)}...`);
@@ -1263,7 +1330,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
         telegramUserId: telegramUserId as string | undefined,
       });
     }
-    
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -1273,7 +1340,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
     if (chainIdStr && user.walletAddress) {
       const { getChainBalances } = await import("./blockchain/balance");
       const chainBalances = await getChainBalances(user.walletAddress, chainIdStr);
-      
+
       return res.json({
         chainId: chainBalances.chainId,
         chainName: chainBalances.chainName,
@@ -1299,7 +1366,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
     if (user.walletAddress) {
       try {
         const { getChainBalances, getWalletBalance } = await import("./blockchain/balance");
-        
+
         // Get Sepolia balances (ETH and USDC)
         try {
           sepoliaBalances = await getChainBalances(user.walletAddress, "11155111"); // Sepolia
@@ -1315,7 +1382,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
           console.error("   Stack:", sepoliaError.stack);
           error = `Sepolia: ${sepoliaError.message}`;
         }
-        
+
         // Also get Arc Testnet balance (using correct chain ID)
         try {
           const arcBalances = await getChainBalances(user.walletAddress, "5042002"); // Arc Testnet (correct chain ID)
@@ -1346,7 +1413,7 @@ app.get("/api/wallet/balance", async (req: any, res: any) => {
         const circleClient = new CircleWalletClient();
         const circleBalance = await circleClient.getWalletBalance(user.circleWalletId);
         const circleBalanceNum = parseFloat(circleBalance);
-        
+
         if (circleBalanceNum > 0) {
           // Update or create USDC balance from Circle
           if (!sepoliaBalances) {
@@ -1434,10 +1501,10 @@ app.post("/api/wallet/circle-id", async (req: any, res: any) => {
     }
 
     const { getUserByTelegramId, getUserByWallet, createOrUpdateUser } = await import("./users/users");
-    const existing = telegramUserId 
+    const existing = telegramUserId
       ? await getUserByTelegramId(telegramUserId)
       : await getUserByWallet(walletAddress);
-    
+
     if (!existing) {
       return res.status(404).json({ error: "User not found. Create user first." });
     }
@@ -1464,18 +1531,18 @@ app.post("/api/wallet/circle-id", async (req: any, res: any) => {
 app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
   try {
     const { walletAddress, telegramUserId, telegramHandle } = (req as any).body || {};
-    
+
     if (!walletAddress && !telegramUserId) {
       return res.status(400).json({ error: "walletAddress or telegramUserId required" });
     }
 
     const { getUserByWallet, getUserByTelegramId, createOrUpdateUser } = await import("./users/users");
-    
+
     // Find user
-    let user = walletAddress 
+    let user = walletAddress
       ? await getUserByWallet(walletAddress)
       : await getUserByTelegramId(telegramUserId);
-    
+
     // Create user if doesn't exist
     if (!user) {
       console.log(`📝 Auto-creating user: ${walletAddress?.slice(0, 6) || telegramUserId}...`);
@@ -1489,10 +1556,10 @@ app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
     // IMPORTANT: Circle developer-controlled wallets are NOT required for fiat funding
     // Circle onramp can fund any wallet address directly (including Dynamic wallets)
     // Circle Smart Accounts (for gasless transactions) are separate and use Circle Client Key
-    
+
     // For now, return success without creating Circle wallet
     // Circle wallets are only needed for specific use cases (escrow, etc.)
-    res.json({ 
+    res.json({
       message: "User account ready. Your Dynamic wallet can receive funds directly.",
       note: "Circle developer-controlled wallets are not needed for fiat funding. Circle onramp works with any wallet address.",
       user,
@@ -1508,35 +1575,35 @@ app.post("/api/wallet/create-circle-wallet", async (req: any, res: any) => {
 app.post("/api/telegram/webhook", async (req: any, res: any) => {
   // Always respond to Telegram immediately to avoid timeout
   res.json({ ok: true });
-  
+
   // Process asynchronously (don't await)
   (async () => {
-  try {
-    const update = req.body;
+    try {
+      const update = req.body;
       if (!update) {
         console.error("❌ No update body received");
         return;
       }
-      
+
       console.log("📩 Telegram webhook received - Update ID:", update.update_id);
       console.log("📩 Update type:", update.message ? "message" : update.callback_query ? "callback_query" : "other");
-      
-    // Handle bot commands
-    if (update.message?.text?.startsWith("/")) {
+
+      // Handle bot commands
+      if (update.message?.text?.startsWith("/")) {
         const command = update.message.text;
         console.log("🔧 Processing command:", command);
         console.log("👤 From user:", update.message.from?.first_name, "(ID:", update.message.from?.id, ")");
         console.log("💬 Chat ID:", update.message.chat?.id);
-        
+
         try {
-      const { handleBotCommand } = await import("./telegram/bot");
-      await handleBotCommand(update);
+          const { handleBotCommand } = await import("./telegram/bot");
+          await handleBotCommand(update);
           console.log("✅ Command handled successfully:", command);
         } catch (cmdError: any) {
           console.error("❌ Error handling command:", command);
           console.error("Error message:", cmdError?.message);
           console.error("Error stack:", cmdError?.stack);
-          
+
           // Try to send error message to user
           try {
             const env = await import("./config/env").then(m => m.loadEnv());
@@ -1572,9 +1639,9 @@ app.post("/api/telegram/webhook", async (req: any, res: any) => {
         const messageText = update.message.text;
         const chatType = update.message.chat?.type;
         const isGroup = chatType === "group" || chatType === "supergroup";
-        
+
         console.log("ℹ️ Regular message received (not a command):", messageText?.substring(0, 50));
-        
+
         // Store group messages for AI analysis
         if (isGroup && update.message.from && messageText) {
           try {
@@ -1599,7 +1666,7 @@ app.post("/api/telegram/webhook", async (req: any, res: any) => {
             // Non-critical error, continue
           }
         }
-        
+
         // Handle @bot mentions in group chats
         if (isGroup && messageText && messageText.includes("@")) {
           try {
@@ -1628,27 +1695,27 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
   try {
     const env = await import("./config/env").then(m => m.loadEnv());
     const webhookSecret = env.GOODY_WEBHOOK_SECRET;
-    
+
     // Get Svix headers for signature verification
     const svixHeaders = {
       "svix-id": req.headers["svix-id"] as string,
       "svix-timestamp": req.headers["svix-timestamp"] as string,
       "svix-signature": req.headers["svix-signature"] as string,
     };
-    
+
     // Verify webhook signature if secret is provided
     if (webhookSecret) {
       try {
         const { verifySvixSignature } = await import("./goody/webhook");
         const payload = JSON.stringify(req.body);
-        
+
         const isValid = verifySvixSignature(payload, svixHeaders, webhookSecret);
-        
+
         if (!isValid) {
           console.warn("⚠️ Invalid webhook signature - rejecting");
           return res.status(401).json({ error: "Invalid signature" });
         }
-        
+
         console.log("🔐 Webhook signature verified");
       } catch (sigError: any) {
         console.warn("⚠️ Signature verification error:", sigError.message);
@@ -1658,10 +1725,10 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
     } else {
       console.warn("⚠️ GOODY_WEBHOOK_SECRET not set - skipping signature verification");
     }
-    
+
     const event = req.body;
     console.log("🎁 Goody webhook received:", JSON.stringify(event, null, 2));
-    
+
     // Handle webhook event using dedicated handler
     try {
       const { handleGoodyWebhook } = await import("./goody/webhook");
@@ -1671,7 +1738,7 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
       // Still return success to Goody to prevent retries
       // Log error for investigation
     }
-    
+
     // Always return success to Goody (200 OK)
     // This prevents Goody from retrying the webhook
     res.json({ received: true, processed: true });
@@ -1687,7 +1754,7 @@ app.post("/api/goody/webhook", async (req: any, res: any) => {
 app.post("/api/cctp/transfer", async (req: any, res: any) => {
   try {
     const { amount, sourceChain, destinationChain, recipientAddress, senderWalletAddress, currency = "USDC" } = req.body || {};
-    
+
     if (!amount || parseFloat(amount) <= 0) {
       return res.status(400).json({ error: "Valid amount required" });
     }
@@ -1775,7 +1842,7 @@ app.post("/api/onramp/wire-instructions", async (req: any, res: any) => {
 
     // For fiat funding, we can use Circle's onramp API directly with the Dynamic wallet address
     // No need for Circle developer-controlled wallets - that's a different use case
-    
+
     // In production, this would use Circle's onramp widget or API
     // For now, return instructions for on-chain funding (testnet)
     res.json({
@@ -1813,15 +1880,15 @@ app.post("/api/offramp/withdraw", async (req: any, res: any) => {
   try {
     const { walletAddress, bankAccountId, amount, currency = "USD" } = req.body;
     if (!walletAddress || !bankAccountId || !amount) {
-      return res.status(400).json({ 
-        error: "walletAddress, bankAccountId, and amount are required" 
+      return res.status(400).json({
+        error: "walletAddress, bankAccountId, and amount are required"
       });
     }
 
     // Get user to find their Circle wallet ID
     const user = await getUserByWallet(walletAddress);
     if (!user?.circleWalletId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Circle wallet not found. Please set up your Circle wallet first.",
         requiresCircleWallet: true,
       });
@@ -1834,7 +1901,7 @@ app.post("/api/offramp/withdraw", async (req: any, res: any) => {
     const amountNum = parseFloat(amount);
 
     if (balanceNum < amountNum) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Insufficient balance",
         balance: balance,
         required: amount,
@@ -1867,11 +1934,11 @@ app.post("/api/offramp/withdraw", async (req: any, res: any) => {
 app.post("/api/bank/link", async (req: any, res: any) => {
   try {
     const bankDetails = req.body;
-    
+
     // Validate required fields
     if (!bankDetails.accountNumber || !bankDetails.routingNumber || !bankDetails.billingDetails) {
-      return res.status(400).json({ 
-        error: "accountNumber, routingNumber, and billingDetails are required" 
+      return res.status(400).json({
+        error: "accountNumber, routingNumber, and billingDetails are required"
       });
     }
 
@@ -2070,7 +2137,7 @@ app.post("/api/bulk-gifts/:code/claim", async (req: any, res: any) => {
     }
 
     const { findBulkGiftRecipient, markBulkGiftRecipientClaimed, getBulkGiftByCode } = await import("./gifts/bulk-gifts");
-    
+
     const recipient = await findBulkGiftRecipient(code, email, phoneNumber);
     if (!recipient) {
       return res.status(404).json({ error: "Recipient not found in this bulk gift" });
@@ -2091,7 +2158,7 @@ app.post("/api/bulk-gifts/:code/claim", async (req: any, res: any) => {
         // Claim the individual USDC gift
         const { getGiftByClaimCode } = await import("./gifts/gifts");
         const gift = await getGiftByClaimCode(recipient.claimCode, recipient.claimSecret);
-        
+
         if (gift) {
           // Execute claim
           const escrowManager = new EscrowManager();
@@ -2158,7 +2225,7 @@ app.post("/api/ai/analyze-group", async (req: any, res: any) => {
     const history = await fetcher.getGroupMessageHistory(chatId, days, 1000);
 
     if (history.members.size === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: "No group message history found. Make sure the bot has access to group messages.",
         suggestion: "The bot needs to receive messages in the group to analyze them. Send some messages and try again."
       });
@@ -2262,6 +2329,25 @@ app.use("/api/smart-contracts", smartContractRoutes);
 app.get("/health", (req: any, res: any) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// Initialize Agents
+import { BirthdayAgent } from "./ai/agents/BirthdayAgent";
+import { FinanceAgent } from "./ai/agents/FinanceAgent";
+import { CommerceAgent } from "./ai/agents/CommerceAgent";
+import { TelegramBot } from "./telegram/bot";
+
+// Start Agents
+const birthdayAgent = new BirthdayAgent();
+const financeAgent = new FinanceAgent();
+const commerceAgent = new CommerceAgent();
+const telegramBot = new TelegramBot();
+
+// Start messaging services (if not handled by webhook)
+if (env.TELEGRAM_BOT_TOKEN) {
+  // In production, we might use webhooks, but for logic initialization
+  // telegramBot.start(); // Handled in its own class, usually called here or separate worker
+  console.log("🤖 Agents initialized: Birthday, Finance, Commerce, Coordinator");
+}
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3001;
 app.listen(PORT, () => {

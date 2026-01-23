@@ -1,0 +1,41 @@
+services:
+  # Backend Service (Node/Express)
+  - type: web
+    name: gifty-backend
+    env: docker
+    plan: free
+    region: oregon
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: NODE_ENV
+        value: production
+      # These need to be added in Render Dashboard manually for security
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CIRCLE_API_KEY
+        sync: false
+      - key: CIRCLE_ENTITY_SECRET
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+
+  # Frontend Service (Next.js)
+  - type: web
+    name: gifty-frontend
+    env: node
+    plan: free
+    region: oregon
+    rootDir: web
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # These need to be added in Render Dashboard manually
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+      - key: NEXT_PUBLIC_CIRCLE_APP_ID
+        sync: false
