@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
+// import { useDynamicContext } from "@dynamic-labs/sdk-react-core";
 import { useTelegram } from "../../../hooks/useTelegram";
 import Link from "next/link";
 
@@ -19,12 +19,16 @@ interface Birthday {
 
 export default function AddBirthdayPage() {
   const router = useRouter();
-  const { primaryWallet, user: dynamicUser } = useDynamicContext();
+  // const { primaryWallet, user: dynamicUser } = useDynamicContext();
   const { isTelegram, user: tgUser } = useTelegram();
+
+  // Placeholder wallet
+  const primaryWallet = { address: "0x" };
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createdBirthday, setCreatedBirthday] = useState<Birthday | null>(null);
-  
+
   const [formData, setFormData] = useState({
     name: "",
     telegramHandle: "",
@@ -38,7 +42,7 @@ export default function AddBirthdayPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    
+
     // User only needs to provide ONE contact method (email OR telegram handle OR phone number)
     // Name is optional but helpful
     if (!formData.telegramHandle && !formData.email && !formData.phoneNumber) {
@@ -87,8 +91,8 @@ export default function AddBirthdayPage() {
 
   function formatDate(month: number, day: number, year?: number): string {
     const date = new Date(year || 2024, month - 1, day);
-    return date.toLocaleDateString("en-US", { 
-      month: "long", 
+    return date.toLocaleDateString("en-US", {
+      month: "long",
       day: "numeric",
       ...(year ? { year: "numeric" } : {})
     });
@@ -105,7 +109,7 @@ export default function AddBirthdayPage() {
   if (createdBirthday) {
     const birthdayName = getBirthdayName();
     const recipientHandle = formData.telegramHandle || formData.email || "";
-    
+
     return (
       <div className="tg-viewport max-w-md mx-auto px-4 py-4">
         <div className="tg-card p-6 text-center mb-4">
@@ -327,4 +331,3 @@ export default function AddBirthdayPage() {
     </div>
   );
 }
-
